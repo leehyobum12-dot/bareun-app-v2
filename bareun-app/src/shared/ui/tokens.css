@@ -1,0 +1,74 @@
+/* shared/ui/tokens.css — 이것 하나가 디자인의 단일 출처입니다 */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+@font-face {
+  font-family: 'GmarketSans'; font-weight: 700; font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff');
+}
+
+:root {
+  /* Brand — 감홍(감주황) */
+  --brand-700:#A83208; --brand-600:#C63D0F; --brand-500:#E8541F;
+  --brand-400:#F2703D; --brand-100:#FFE3D3; --brand-50:#FFF4EC;
+
+  /* Ink — 따뜻한 먹색 */
+  --ink-900:#1E1310; --ink-700:#43302A; --ink-500:#6E5A52;
+  --ink-300:#A08D84; --ink-100:#D8CCC5;
+
+  /* Surface */
+  --bg:#FAF6EF; --surface:#FFFFFF; --surface-warm:#FFF9F4;
+  --line:#EDE4DC; --line-strong:#D9CCC2;
+
+  /* Semantic — 나트륨 신호등 (WHO 기준) */
+  --safe-600:#1B7A43;  --safe-100:#DFF2E6;
+  --warn-600:#B26A00;  --warn-100:#FCEFD3;
+  --danger-600:#C73325; --danger-100:#FBE2DE;
+  --info-600:#1F6FB2;  --info-100:#E1EEF9;
+
+  --font-display:'GmarketSans','Pretendard Variable',sans-serif;
+  --font-body:'Pretendard Variable',Pretendard,-apple-system,sans-serif;
+
+  /* 시니어 사이징 */
+  --text-xs:13px; --text-sm:15px; --text-base:17px; --text-lg:19px;
+  --text-xl:22px; --text-2xl:26px; --text-3xl:32px;
+  --touch-sm:40px; --touch-md:48px; --touch-lg:56px;
+
+  --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:26px;
+  --shadow-1:0 1px 3px rgba(30,19,16,.06);
+  --shadow-2:0 8px 24px -8px rgba(30,19,16,.14);
+  --shadow-3:0 20px 48px -16px rgba(30,19,16,.22);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; font-family:var(--font-body); font-size:var(--text-base);
+  line-height:1.6; color:var(--ink-900); -webkit-font-smoothing:antialiased;
+  /* 레이어드 앰비언트 배경: 감홍 광원 + 초록 광원 */
+  background:
+    radial-gradient(1000px 520px at 92% -8%, rgba(232,84,31,.08), transparent 60%),
+    radial-gradient(800px 460px at -10% 32%, rgba(27,122,67,.06), transparent 55%),
+    var(--bg);
+  background-attachment:fixed;
+}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit}
+:focus-visible{outline:3px solid var(--brand-500);outline-offset:2px;border-radius:6px}
+
+/* 모션 */
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes pulse-danger{0%{box-shadow:0 0 0 0 rgba(199,51,37,.35)}100%{box-shadow:0 0 0 9px rgba(199,51,37,0)}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+@keyframes gauge{from{width:0}}
+.reveal{animation:rise .5s cubic-bezier(.22,.8,.36,1) both;animation-delay:var(--d,0ms)}
+
+/* 모바일 프레임 */
+.frame{max-width:480px;margin:0 auto;min-height:100dvh;background:var(--bg);
+  border-left:1px solid var(--line);border-right:1px solid var(--line);box-shadow:var(--shadow-3)}
+
+/* 스크롤 유틸 */
+.scroll-x{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px}
+.scroll-x::-webkit-scrollbar{display:none}
+
+/* 스켈레톤 */
+.skeleton{background:linear-gradient(90deg,#EFE7DD 25%,#F8F3EB 50%,#EFE7DD 75%);
+  background-size:800px 100%;animation:shimmer 1.4s infinite linear;border-radius:var(--r-sm)}
