@@ -1,0 +1,37 @@
+// domains/restaurant/api/restaurant.api.js
+import { rpc, from } from '@/core/lib/api';
+import { PAGE_SIZE } from '../constants';
+
+/**
+ * [계약] 페이지는 이 객체만 압니다.
+ * 자체 서버 이관 시 이 파일만 REST 구현으로 교체하세요.
+ */
+export const RestaurantApi = {
+  async listNearby({ lat, lng, filters, page }) {
+    return rpc('get_nearby_restaurants', {
+      user_lat: lat, user_lng: lng,
+      p_si: filters.district, p_emd: filters.emd,
+      p_biz: filters.bizType, p_avoid: filters.avoidTags, p_keyword: filters.keyword,
+    }, '식당 목록을 불러오지 못했습니다.');
+  },
+
+  async listByFilter({ filters, page }) {
+    let q = from('restaurants').select('*').eq('is_verified', true).eq('is_closed', false);
+    if (filters.district) q = q.eq('si', filters.district);
+    if (filters.emd) q = q.eq('emd', filters.emd);
+    if (filters.bizType) q = q.like('biz_type', `%${filters.bizType}%`);
+    if (filters.avoidTags?.length) q = q.not('avoid_tags', 'ov', `{${filters.avoidTags.join(',')}}`);
+    if (filters.keyword) q = q.or(`store_name.ilike.%${filters.keyword}%,main_menu.ilike.%${filters.keyword}%`);
+    const { data, error } = await q.order('id').range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async listMarkers({ filters }) {
+    let q = from('restaurants').select('id, lat, lng, store_name').eq('is_verified', true).eq('is_closed', false);
+    if (filters.district) q = q.eq('si', filters.district);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data ?? [];
+  },
+};
