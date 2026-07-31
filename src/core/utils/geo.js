@@ -1,4 +1,6 @@
 // core/utils/geo.js
+import { AppError } from '@/core/lib/api';
+
 export function distanceKm(lat1, lon1, lat2, lon2) {
   const R = 6371, toRad = d => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);

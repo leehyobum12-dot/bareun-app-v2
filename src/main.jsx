@@ -1,14 +1,13 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import App from './app/App.jsx'
+// src/main.jsx
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './app/App'
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-      <App />
-  </StrictMode>,
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode><App /></React.StrictMode>
 )
 
-// main.jsx — 개발환경에서는 서비스워커를 등록하지 않습니다 (에러 디버깅의 핵심)
+// 개발환경에서는 서비스워커를 등록하지 않습니다 (에러 디버깅 핵심)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'));
+  window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'))
 }

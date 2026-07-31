@@ -1,10 +1,10 @@
-// app/App.jsx
-import { AuthProvider } from '@/domains/auth/providers/AuthProvider';
-import { ToastProvider } from './providers/ToastProvider';
-import ErrorBoundary from '@/shared/ui/ErrorBoundary';
-import AppRouter from './router';
-import '@/shared/ui/tokens.css';
-import '@/shared/ui/components.css';
+// src/app/App.jsx
+import { AuthProvider } from '@/domains/auth/providers/AuthProvider'
+import { ToastProvider } from '@/shared/ui/ToastProvider'
+import ErrorBoundary from '@/shared/ui/ErrorBoundary'
+import AppRouter from './router'
+import '@/shared/ui/tokens.css'
+import '@/shared/ui/components.css'
 
 export default function App() {
   return (
@@ -15,5 +15,5 @@ export default function App() {
         </AuthProvider>
       </ToastProvider>
     </ErrorBoundary>
-  );
+  )
 }

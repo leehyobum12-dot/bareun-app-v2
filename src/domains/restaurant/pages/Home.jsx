@@ -74,6 +74,7 @@ export default function Home() {
     } finally {
       setLoading(false); setLoadingMore(false);
     }
+    
   }, [filters, userLoc, toast]);
 
   useEffect(() => { load(0, true); }, [load]);

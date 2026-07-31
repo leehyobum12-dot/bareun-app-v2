@@ -39,13 +39,35 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true;
     const sync = async (session) => {
-      if (!session?.user) { if (mounted) { setUser(null); setLoading(false); } return; }
-      const u = await buildUser(session.user);
-      if (mounted) { setUser(u); setLoading(false); }
+      if (!session?.user) {
+        if (mounted) { setUser(null); setLoading(false); }
+        return;
+      }
+      try {
+        const u = await buildUser(session.user);
+        if (mounted) { setUser(u); setLoading(false); }
+      } catch (error) {
+        console.error('[AuthProvider] buildUser failed', error);
+        if (mounted) { setUser(null); setLoading(false); }
+      }
     };
-    supabase.auth.getSession().then(({ data }) => sync(data.session));
+
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (error) throw error;
+        return data?.session;
+      })
+      .then(sync)
+      .catch((error) => {
+        console.error('[AuthProvider] getSession failed', error);
+        if (mounted) { setUser(null); setLoading(false); }
+      });
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => sync(s));
-    return () => { mounted = false; sub.subscription.unsubscribe(); };
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe?.();
+    };
   }, [buildUser]);
 
   const logout = useCallback(async () => {

@@ -30,6 +30,10 @@ export const RestaurantApi = {
   async listMarkers({ filters }) {
     let q = from('restaurants').select('id, lat, lng, store_name').eq('is_verified', true).eq('is_closed', false);
     if (filters.district) q = q.eq('si', filters.district);
+    if (filters.emd) q = q.eq('emd', filters.emd);
+    if (filters.bizType) q = q.like('biz_type', `%${filters.bizType}%`);
+    if (filters.avoidTags?.length) q = q.not('avoid_tags', 'ov', `{${filters.avoidTags.join(',')}}`);
+    if (filters.keyword) q = q.or(`store_name.ilike.%${filters.keyword}%,main_menu.ilike.%${filters.keyword}%`);
     const { data, error } = await q;
     if (error) throw error;
     return data ?? [];
