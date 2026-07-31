@@ -1,7 +1,7 @@
 // src/app/router.jsx
 import { lazy, Suspense } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom'
-import { useAuth } from '@/domains/auth/providers/AuthProvider'
+import { useAuth } from '@/domains/auth'
 
 const Login = lazy(() => import('@/domains/auth/pages/Login'))
 const Terms = lazy(() => import('@/domains/onboarding/pages/Terms'))

@@ -13,8 +13,17 @@ export const OnboardingApi = {
     )
   },
   async saveHealthProfile(userId, { diseases, stages }) {
+    const hasHealthData = Array.isArray(diseases) && diseases.length > 0 || Object.keys(stages || {}).length > 0
+    if (!hasHealthData) {
+      return run(
+        from('profiles').update({ onboarding_completed: true }).eq('id', userId),
+        '온보딩 완료 처리에 실패했습니다.'
+      )
+    }
+
+    const payload = { id: userId, diseases, stages, health_data_agreed: true }
     await run(
-      from('user_health').upsert({ id: userId, diseases, stages, health_data_agreed: true }, { onConflict: 'id' }),
+      from('user_health').upsert([payload], { onConflict: 'id' }),
       '건강 정보 저장에 실패했습니다.'
     )
     await run(

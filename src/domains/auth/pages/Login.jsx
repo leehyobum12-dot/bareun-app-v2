@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MobileFrame from '@/shared/ui/MobileFrame'
-import { useToast } from '@/shared/ui/ToastProvider'
-import { useAuth } from '../providers/AuthProvider'
+import { useToast } from '@/app/providers/ToastProvider'
+import { useAuth } from '@/domains/auth'
 import { AuthApi } from '../api/auth.api'
 import './Login.css'
 

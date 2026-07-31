@@ -11,7 +11,7 @@ import EmptyState from '@/shared/ui/EmptyState';
 import { SkeletonCard } from '@/shared/ui/Skeleton';
 import Button from '@/shared/ui/Button';
 import { useToast } from '@/app/providers/ToastProvider';
-import { useAuth } from '@/domains/auth/hooks/useAuth';
+import { useAuth } from '@/domains/auth';
 import { useDebounce } from '@/shared/hooks/useDebounce';
 import { DISTRICTS, EMD_BY_DISTRICT, BIZ_TYPE } from '@/shared/constants/region';
 import { DISEASE_CATEGORIES } from '@/domains/onboarding/constants';
@@ -59,13 +59,14 @@ export default function Home() {
   }), [district, emd, bizType, debounced, user?.healthProfile]);
 
   const load = useCallback(async (p, reset = false) => {
+    if (userLoc && p > 0) return;
     reset ? setLoading(true) : setLoadingMore(true);
     try {
       const list = userLoc
         ? await RestaurantApi.listNearby({ lat: userLoc[0], lng: userLoc[1], filters, page: p })
         : await RestaurantApi.listByFilter({ filters, page: p });
       setRestaurants(prev => (reset ? list : [...prev, ...list]));
-      setHasMore(list.length === PAGE_SIZE);
+      setHasMore(userLoc ? false : list.length === PAGE_SIZE);
       setPage(p);
       if (reset) setMarkers(await RestaurantApi.listMarkers({ filters }));
     } catch (e) {
@@ -74,7 +75,6 @@ export default function Home() {
     } finally {
       setLoading(false); setLoadingMore(false);
     }
-    
   }, [filters, userLoc, toast]);
 
   useEffect(() => { load(0, true); }, [load]);
@@ -86,14 +86,14 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!sentinelRef.current || !hasMore || loadingMore || loading) return;
+    if (!sentinelRef.current || !hasMore || loadingMore || loading || userLoc) return;
     const obs = new IntersectionObserver(
       entries => { if (entries[0].isIntersecting) load(page + 1); },
       { rootMargin: '200px' }
     );
     obs.observe(sentinelRef.current);
     return () => obs.disconnect();
-  }, [page, hasMore, loadingMore, loading, load]);
+  }, [page, hasMore, loadingMore, loading, load, userLoc]);
 
   const locate = async () => {
     try {

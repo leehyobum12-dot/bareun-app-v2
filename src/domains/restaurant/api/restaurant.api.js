@@ -20,7 +20,10 @@ export const RestaurantApi = {
     if (filters.district) q = q.eq('si', filters.district);
     if (filters.emd) q = q.eq('emd', filters.emd);
     if (filters.bizType) q = q.like('biz_type', `%${filters.bizType}%`);
-    if (filters.avoidTags?.length) q = q.not('avoid_tags', 'ov', `{${filters.avoidTags.join(',')}}`);
+    if (filters.avoidTags?.length) {
+      const avoidSet = `{${filters.avoidTags.join(',')}}`;
+      q = q.or(`avoid_tags.is.null,avoid_tags.not.ov.${avoidSet}`);
+    }
     if (filters.keyword) q = q.or(`store_name.ilike.%${filters.keyword}%,main_menu.ilike.%${filters.keyword}%`);
     const { data, error } = await q.order('id').range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (error) throw error;
@@ -32,7 +35,10 @@ export const RestaurantApi = {
     if (filters.district) q = q.eq('si', filters.district);
     if (filters.emd) q = q.eq('emd', filters.emd);
     if (filters.bizType) q = q.like('biz_type', `%${filters.bizType}%`);
-    if (filters.avoidTags?.length) q = q.not('avoid_tags', 'ov', `{${filters.avoidTags.join(',')}}`);
+    if (filters.avoidTags?.length) {
+      const avoidSet = `{${filters.avoidTags.join(',')}}`;
+      q = q.or(`avoid_tags.is.null,avoid_tags.not.ov.${avoidSet}`);
+    }
     if (filters.keyword) q = q.or(`store_name.ilike.%${filters.keyword}%,main_menu.ilike.%${filters.keyword}%`);
     const { data, error } = await q;
     if (error) throw error;

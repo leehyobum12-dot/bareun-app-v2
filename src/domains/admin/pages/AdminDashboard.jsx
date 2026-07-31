@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import MobileFrame from '@/shared/ui/MobileFrame'
 import Button from '@/shared/ui/Button'
 import EmptyState from '@/shared/ui/EmptyState'
-import { useToast } from '@/shared/ui/ToastProvider'
+import { useToast } from '@/app/providers/ToastProvider'
 import { AdminApi } from '../api/admin.api'
 import './admin.css'
 

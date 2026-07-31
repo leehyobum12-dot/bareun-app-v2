@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import MobileFrame from '@/shared/ui/MobileFrame'
 import Button from '@/shared/ui/Button'
-import { useToast } from '@/shared/ui/ToastProvider'
+import { useToast } from '@/app/providers/ToastProvider'
 import { isPhone } from '@/core/security/validators'
 import { OwnerApi } from '../api/owner.api'
 import './owner.css'

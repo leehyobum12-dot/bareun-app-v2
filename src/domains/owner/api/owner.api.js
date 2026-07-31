@@ -10,17 +10,25 @@ const generateUuid = () => {
 
 export const OwnerApi = {
   async getMyStore(ownerId) {
-    const { data } = await from('restaurants').select('*').eq('owner_id', ownerId).order('id', { ascending: false }).limit(1)
+    const { data } = await run(
+      from('restaurants').select('*').eq('owner_id', ownerId).order('id', { ascending: false }).limit(1),
+      '내 매장 정보를 불러오지 못했습니다.'
+    )
     return data?.[0] ?? null
   },
   async getVerificationStatus(restaurantId) {
-    const { data } = await from('owner_verifications').select('status').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(1)
+    const { data } = await run(
+      from('owner_verifications').select('status').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(1),
+      '인증 상태를 불러오지 못했습니다.'
+    )
     return data?.[0]?.status ?? 'approved'
   },
   async searchPublicStores(keyword) {
-    const { data, error } = await from('restaurants').select('*')
-      .ilike('store_name', `%${keyword}%`).is('owner_id', null).eq('is_closed', false).eq('is_verified', true).limit(20)
-    if (error) throw error
+    const { data } = await run(
+      from('restaurants').select('*')
+        .ilike('store_name', `%${keyword}%`).is('owner_id', null).eq('is_closed', false).eq('is_verified', true).limit(20),
+      '가게 검색에 실패했습니다.'
+    )
     return data ?? []
   },
   async claimStore(restaurantId) {

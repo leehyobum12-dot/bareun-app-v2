@@ -1,6 +1,6 @@
 // src/app/App.jsx
-import { AuthProvider } from '@/domains/auth/providers/AuthProvider'
-import { ToastProvider } from '@/shared/ui/ToastProvider'
+import { AuthProvider } from '@/domains/auth'
+import { ToastProvider } from '@/app/providers/ToastProvider'
 import ErrorBoundary from '@/shared/ui/ErrorBoundary'
 import AppRouter from './router'
 import '@/shared/ui/tokens.css'
