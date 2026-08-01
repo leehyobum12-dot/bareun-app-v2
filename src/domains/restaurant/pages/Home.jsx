@@ -21,6 +21,7 @@ import { buildAvoidTags } from '../lib/avoidTags';
 import { distanceKm, getCurrentPosition } from '@/core/utils/geo';
 import { isSafeUrl } from '@/core/security/validators';
 import { PAGE_SIZE } from '../constants';
+import { useFilterStore } from '../stores/filterStore';
 import './Home.css';
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -35,11 +36,11 @@ export default function Home() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [search, setSearch] = useState('');
+  // [Zustand] 필터 상태 — 컴포넌트 내부에서 호출
+  const { search, district, emd, bizType, setSearch, setDistrict, setEmd, setBizType, reset } = useFilterStore();
   const debounced = useDebounce(search, 500);
-  const [district, setDistrict] = useState('전체 지역');
-  const [emd, setEmd] = useState('전체 동네');
-  const [bizType, setBizType] = useState('전체');
+
+  // [useState] 필터 외 UI 상태
   const [userLoc, setUserLoc] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const sentinelRef = useRef(null);
@@ -175,7 +176,7 @@ export default function Home() {
 
         {/* ── 지역 + 업종 ── */}
         <div className="filterbar reveal" style={{ '--d': '100ms' }}>
-          <select value={district} onChange={e => { setDistrict(e.target.value); setEmd('전체 동네'); }} aria-label="지역">
+          <select value={district} onChange={e => setDistrict(e.target.value)} aria-label="지역">
             {DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
           {district !== '전체 지역' && (
@@ -216,7 +217,7 @@ export default function Home() {
             debounced
               ? <EmptyState icon="🔍" title={`'${search}' 검색 결과가 없어요`} description="다른 키워드로 검색해 보세요." />
               : <EmptyState icon="🍽️" title="조건에 맞는 식당이 없어요" description="동네를 바꾸거나 건강 필터를 확인해 보세요."
-                  actionLabel="전체 지역으로" onAction={() => { setDistrict('전체 지역'); setEmd('전체 동네'); setBizType('전체'); }} />
+                  actionLabel="전체 지역으로" onAction={() => reset()} />
           ) : (
             restaurants.map((r, i) => {
               const dist = userLoc && r.lat && r.lng
