@@ -20,10 +20,4 @@ export const AccountApi = {
     }
     await rpc('delete_user_account', {}, '탈퇴 처리 중 문제가 발생했습니다.')
   },
-  async upgradeToOwner(userId) {
-    await run(
-      from('profiles').update({ user_type: 'owner', onboarding_completed: true }).eq('id', userId),
-      '회원 등급 변경에 실패했습니다.'
-    )
-  },
 }

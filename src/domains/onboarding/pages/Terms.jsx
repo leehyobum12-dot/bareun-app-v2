@@ -28,7 +28,7 @@ export default function Terms() {
   const handleAgree = async () => {
     setBusy(true)
     try {
-      await OnboardingApi.saveTermsAgreement(user.id, user)
+      await OnboardingApi.saveTermsAgreement(user.id)
       await refresh()
       toast.success('동의가 완료되었습니다.')
       navigate('/health/step1')

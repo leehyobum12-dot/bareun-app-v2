@@ -4,9 +4,11 @@ import Button from '@/shared/ui/Button'
 import EmptyState from '@/shared/ui/EmptyState'
 import { useToast } from '@/app/providers/ToastProvider'
 import { AdminApi } from '../api/admin.api'
+import { useNavigate } from 'react-router-dom'
 import './admin.css'
 
 export default function AdminDashboard() {
+  const navigate = useNavigate()
   const toast = useToast()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -43,7 +45,17 @@ export default function AdminDashboard() {
 
   return (
     <MobileFrame>
-      <header className="ad-header"><h1>최고 관리자 센터 👑</h1></header>
+      <header className="ad-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <h1>최고 관리자 센터 👑</h1>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={load} style={{ border: 0, background: 'var(--bg, #f5f5f5)', color: 'var(--ink-700, #555)', padding: '8px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            🔄 새로고침
+          </button>
+          <button onClick={() => navigate('/?guest=1')} style={{ border: 0, background: 'var(--bg, #f5f5f5)', color: 'var(--ink-700, #555)', padding: '8px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            손님 모드 🏠
+          </button>
+        </div>
+      </header>
       <main className="ad-main">
         <div className="ad-count reveal">
           <span className="ad-count-num">{items.length}</span>
@@ -65,19 +77,27 @@ export default function AdminDashboard() {
               <p className="ad-addr">📍 {item.restaurants?.road_name}</p>
               <p className="ad-biz">📋 사업자번호: {item.biz_reg_number}</p>
 
-              <Button variant="ghost" block onClick={() => viewDoc(item.biz_reg_url, '사업자등록증')} style={{ marginBottom: 8 }}>
-                🔍 사업자등록증 확인
-              </Button>
-              {item.cert_urls && Object.keys(item.cert_urls).length > 0 && (
+              {item.biz_reg_url ? (
+                <Button variant="ghost" block onClick={() => viewDoc(item.biz_reg_url, '사업자등록증')} style={{ marginBottom: 8 }}>
+                  🔍 사업자등록증 확인
+                </Button>
+              ) : (
+                <Button variant="ghost" block disabled style={{ marginBottom: 8, opacity: 0.6 }}>
+                  📭 사업자등록증 미제출 (반려 후 재제출 유도)
+                </Button>
+              )}
+              {item.cert_urls && Object.keys(item.cert_urls).length > 0 ? (
                 <div className="ad-certs">
                   <p>선택 증명서 확인</p>
-                  {Object.entries(item.cert_urls).map(([name, path]) => (
-                    <Button key={name} variant="ghost" block size="sm" onClick={() => viewDoc(path, name)} style={{ marginBottom: 6 }}>
-                      📎 {name}
-                    </Button>
-                  ))}
+                  {Object.entries(item.cert_urls)
+                    .filter(([, path]) => !!path)
+                    .map(([name, path]) => (
+                      <Button key={name} variant="ghost" block size="sm" onClick={() => viewDoc(path, name)} style={{ marginBottom: 6 }}>
+                        📎 {name}
+                      </Button>
+                    ))}
                 </div>
-              )}
+              ) : null}
 
               <div className="ad-actions">
                 <Button variant="danger-ghost" style={{ flex: 1 }} disabled={busyId === item.id} onClick={() => setStatus(item, false)}>반려</Button>

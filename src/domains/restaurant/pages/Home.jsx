@@ -225,7 +225,7 @@ export default function Home() {
                       📅 예약하기
                     </Button>
                     <Button className="r-card-btn" disabled={!r.lat || !r.lng}
-                      onClick={() => r.lat && r.lng && window.open(`https://map.kakao.com/link/to/${r.store_name},${r.lat},${r.lng}`, '_blank', 'noopener,noreferrer')}>
+                      onClick={() => r.lat && r.lng && window.open(`https://map.kakao.com/link/to/${encodeURIComponent(r.store_name)},${r.lat},${r.lng}`, '_blank', 'noopener,noreferrer')}>
                       🗺️ 길찾기
                     </Button>
                   </div>

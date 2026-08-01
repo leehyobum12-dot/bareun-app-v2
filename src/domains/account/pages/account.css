@@ -38,3 +38,5 @@
 .mp-withdraw button{border:0;background:none;color:var(--ink-300);font-size:var(--text-sm);text-decoration:underline;padding:10px}
 .mp-footer{text-align:center;padding:0 24px calc(40px + env(safe-area-inset-bottom))}
 .mp-footer p{font-size:var(--text-xs);color:var(--ink-300);line-height:1.7}
+.mp-menu-row.mp-logout strong { color: var(--ink-500); }
+.mp-menu-row.mp-logout .mp-menu-chev { color: var(--ink-300); }

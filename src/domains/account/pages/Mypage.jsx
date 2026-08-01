@@ -20,10 +20,9 @@ export default function MyPage() {
     return <span className="mp-provider">📧 이메일 계정</span>
   }
 
-  const upgrade = async () => {
-    if (!window.confirm('가게를 등록하고 사장님 모드로 전환할까요?\n(언제든 손님 모드로 돌아올 수 있습니다)')) return
-    try { await AccountApi.upgradeToOwner(user.id); await refresh(); toast.success('사장님 모드로 전환되었습니다.') }
-    catch { toast.error('전환 중 오류가 발생했습니다.') }
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login', { replace: true })
   }
 
   const withdraw = async () => {
@@ -38,6 +37,8 @@ export default function MyPage() {
       navigate('/login', { replace: true })
     } catch (e) { toast.error(`탈퇴 처리 중 문제가 발생했습니다: ${e.message}`) }
   }
+
+
 
   return (
     <MobileFrame>
@@ -87,7 +88,7 @@ export default function MyPage() {
             <span>👔 사장님 라운지로 돌아가기</span><span>→</span>
           </button>
         ) : (
-          <button className="mp-cta" onClick={upgrade}>
+          <button className="mp-cta" onClick={() => navigate('/owner')}>
             <span>🏪 가게 등록하고 사장님 되기</span><span>→</span>
           </button>
         )}
@@ -105,6 +106,20 @@ export default function MyPage() {
             <span className="mp-menu-chev">›</span>
           </div>
         ))}
+
+        {/* ★ 로그아웃 — 기존 클래스 재사용, 신규 CSS 없음 */}
+        <div
+          className="mp-menu-row"
+          onClick={handleLogout}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleLogout()}
+          role="button"
+          tabIndex={0}
+          aria-label="로그아웃"
+        >
+          <span className="mp-menu-ic">🚪</span>
+          <div><strong>로그아웃</strong><small>현재 계정에서 로그아웃합니다</small></div>
+          <span className="mp-menu-chev">›</span>
+        </div>
       </section>
 
       <section className="mp-disclaimer reveal" style={{ '--d': '180ms' }}>

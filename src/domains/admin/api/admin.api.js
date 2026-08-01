@@ -1,4 +1,6 @@
-import { from, run } from '@/core/lib/api'
+// src/domains/admin/api/admin.api.js
+
+import { from, rpc, run } from '@/core/lib/api'
 import { supabase } from '@/core/lib/supabase'
 
 export const AdminApi = {
@@ -6,30 +8,45 @@ export const AdminApi = {
     const { data } = await run(
       from('owner_verifications')
         .select('*, restaurants ( store_name, road_name, biz_type )')
-        .eq('status', 'pending').order('created_at', { ascending: false }),
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false }),
       '심사 대기 목록을 불러오지 못했습니다.'
     )
     return data ?? []
   },
+
   async getSignedUrl(path) {
+    if (!path) throw new Error('제출된 서류가 없습니다. (사장님이 서류를 다시 제출해야 합니다)')
     const { data } = await run(
       supabase.storage.from('business_docs').createSignedUrl(path, 300),
       '서명된 URL을 생성하지 못했습니다.'
     )
     return data.signedUrl
   },
+
+  /**
+   * [수정] 승인 처리
+   * - 2개 쿼리 → RPC 1회 호출 (원자적)
+   * - user_type 자동 전환 포함
+   * - 중복 pending 레코드 정리 포함
+   */
   async approve(item) {
-    await run(
-      from('owner_verifications').update({ status: 'approved' }).eq('id', item.id),
-      '심사 상태 변경에 실패했습니다.'
+    return rpc(
+      'approve_restaurant',
+      { p_verification_id: item.id },
+      '승인 처리에 실패했습니다.'
     )
-    const { data } = await run(
-      from('restaurants').update({ is_verified: true }).eq('id', item.restaurant_id).select(),
-      '식당 승인 처리에 실패했습니다.'
-    )
-    if (!data || data.length === 0) throw new Error('권한(RLS) 문제로 식당 노출 처리에 실패했습니다. DB 정책을 확인하세요.')
   },
+
+  /**
+   * [수정] 반려 처리
+   * - RPC로 전환 (원자적 + 관리자 권한 검증)
+   */
   async reject(item) {
-    await run(from('owner_verifications').update({ status: 'rejected' }).eq('id', item.id), '반려 처리에 실패했습니다.')
+    return rpc(
+      'reject_restaurant',
+      { p_verification_id: item.id, p_reason: null },
+      '반려 처리에 실패했습니다.'
+    )
   },
 }

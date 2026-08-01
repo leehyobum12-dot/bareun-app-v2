@@ -22,10 +22,13 @@ export default function StoreSearch({ onBack, onClaim, onRegister }) {
     finally { setBusy(false) }
   }
 
-  const claim = async (s) => {
-    if (!window.confirm(`[${s.store_name}] 가게를 내 식당으로 연동할까요?\n\n안전한 소유권 확인을 위해 서류 제출 화면으로 이동합니다.`)) return
-    try { await OwnerApi.claimStore(s.id); toast.success('가게가 연동되었습니다. 서류를 제출해 주세요.'); onClaim(s) }
-    catch (e) { toast.error(e.message) }
+  const claim = (s) => {
+    if (!window.confirm(
+      `[${s.store_name}] 가게를 내 식당으로 연동할까요?\n\n` +
+      `확인 후 서류 작성 화면으로 이동합니다.\n` +
+      `(이 단계에서는 아직 연동되지 않으며, 서류를 제출해야 확정됩니다.)`
+    )) return
+    onClaim(s)   // ← RPC 없음. 화면 이동만. DB 무변경.
   }
 
   return (
