@@ -8,12 +8,14 @@ import '@/shared/ui/components.css'
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <ToastProvider>
-        <AuthProvider>
-          <AppRouter />
-        </AuthProvider>
-      </ToastProvider>
-    </ErrorBoundary>
+    <QueryProvider>
+      <ErrorBoundary>
+        <ToastProvider>
+          <AuthProvider>
+            <AppRouter />
+          </AuthProvider>
+        </ToastProvider>
+      </ErrorBoundary>
+    </QueryProvider>
   )
 }

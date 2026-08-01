@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react'
+// src/domains/admin/pages/AdminDashboard.jsx
+
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import MobileFrame from '@/shared/ui/MobileFrame'
 import Button from '@/shared/ui/Button'
 import EmptyState from '@/shared/ui/EmptyState'
@@ -10,18 +13,21 @@ import './admin.css'
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const toast = useToast()
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+
   const [preview, setPreview] = useState(null)
   const [busyId, setBusyId] = useState(null)
 
-  const load = async () => {
-    setLoading(true)
-    try { setItems(await AdminApi.getPendingVerifications()) }
-    catch { toast.error('심사 목록을 불러오지 못했습니다.') }
-    finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, []) // eslint-disable-line
+  /*
+   * [TanStack Query] 심사 대기 목록
+   * - loading, error, refetch 자동 관리
+   * - 5분간 캐시 (staleTime)
+   * - 네트워크 오류 시 2회 재시도 (retry)
+   */
+  const { data: items = [], isLoading: loading } = useQuery({
+    queryKey: ['admin', 'pending-verifications'],
+    queryFn: AdminApi.getPendingVerifications,
+  })
 
   const viewDoc = async (path, title) => {
     try { setPreview({ url: await AdminApi.getSignedUrl(path), title }) }
@@ -37,8 +43,10 @@ export default function AdminDashboard() {
     try {
       approve ? await AdminApi.approve(item) : await AdminApi.reject(item)
       toast.success(`${approve ? '승인' : '반려'} 처리되었습니다.`)
-      setItems((prev) => prev.filter((v) => v.id !== item.id))
       setPreview(null)
+      // [TanStack Query] 서버 상태 무효화 → 자동 리페치
+      // 수동 setItems(filter) 불필요
+      queryClient.invalidateQueries({ queryKey: ['admin', 'pending-verifications'] })
     } catch (e) { toast.error(e.message) }
     finally { setBusyId(null) }
   }
@@ -48,10 +56,16 @@ export default function AdminDashboard() {
       <header className="ad-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
         <h1>최고 관리자 센터 👑</h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={load} style={{ border: 0, background: 'var(--bg, #f5f5f5)', color: 'var(--ink-700, #555)', padding: '8px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <button
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['admin', 'pending-verifications'] })}
+            style={{ border: 0, background: 'var(--bg, #f5f5f5)', color: 'var(--ink-700, #555)', padding: '8px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
             🔄 새로고침
           </button>
-          <button onClick={() => navigate('/?guest=1')} style={{ border: 0, background: 'var(--bg, #f5f5f5)', color: 'var(--ink-700, #555)', padding: '8px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <button
+            onClick={() => navigate('/?guest=1')}
+            style={{ border: 0, background: 'var(--bg, #f5f5f5)', color: 'var(--ink-700, #555)', padding: '8px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
             손님 모드 🏠
           </button>
         </div>
@@ -83,7 +97,7 @@ export default function AdminDashboard() {
                 </Button>
               ) : (
                 <Button variant="ghost" block disabled style={{ marginBottom: 8, opacity: 0.6 }}>
-                  📭 사업자등록증 미제출 (반려 후 재제출 유도)
+                  📭 사업자등록증 미제출
                 </Button>
               )}
               {item.cert_urls && Object.keys(item.cert_urls).length > 0 ? (

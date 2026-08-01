@@ -1,7 +1,8 @@
 // src/domains/owner/pages/OwnerDashboard.jsx
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import MobileFrame from '@/shared/ui/MobileFrame'
 import Button from '@/shared/ui/Button'
 import SodiumBadge from '@/shared/ui/SodiumBadge'
@@ -16,35 +17,53 @@ import StoreEdit from './StoreEdit'
 import './owner.css'
 
 export default function OwnerDashboard() {
-  const { user, logout, refresh } = useAuth()   // ★ refresh 추가
+  const { user, logout, refresh } = useAuth()
   const navigate = useNavigate()
-  const toast = useToast()                       // ★ toast 추가
+  const toast = useToast()
+  const queryClient = useQueryClient()
 
   const [view, setView] = useState('dashboard')
-  const [store, setStore] = useState(null)
-  const [status, setStatus] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [claimTarget, setClaimTarget] = useState(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const my = await OwnerApi.getMyStore(user.id)
-    setStore(my)
-    if (my) {
-      setStatus(await OwnerApi.getVerificationStatus(my.id))
-      setClaimTarget(my)   // ★ null → my (재제출 시 연동 모드 보존)
+  /*
+   * [TanStack Query] 내 가게 조회
+   * - 5분 캐시 (staleTime)
+   * - 네트워크 오류 시 2회 재시도 (retry)
+   * - invalidateQueries로 선택적 갱신
+   */
+  const { data: store = null, isLoading: storeLoading } = useQuery({
+    queryKey: ['owner', 'my-store', user.id],
+    queryFn: () => OwnerApi.getMyStore(user.id),
+  })
+
+  /*
+   * [TanStack Query] 심사 상태 조회 (가게가 있을 때만)
+   * - enabled: !!store → store 없으면 쿼리 자체를 안 날림
+   */
+  const { data: status = null } = useQuery({
+    queryKey: ['owner', 'verification-status', store?.id],
+    queryFn: () => OwnerApi.getVerificationStatus(store.id),
+    enabled: !!store,
+  })
+
+  /*
+   * [F-5] store 변화 시 claimTarget 동기화
+   * - store 존재 → claimTarget = store (재제출 시 연동 모드 보존)
+   * - store 없음 → claimTarget = null + search로 이동
+   */
+  useEffect(() => {
+    if (storeLoading) return
+    if (store) {
+      setClaimTarget(store)
     } else {
-      setStatus(null)
       setClaimTarget(null)
       setView((v) => (v === 'dashboard' ? 'search' : v))
     }
-    setLoading(false)
-  }, [user.id])
-
-  useEffect(() => { load() }, [load])
+  }, [storeLoading, store])
 
   const locked = status === 'pending' || status === 'rejected'
 
+  // [F-7] alert → toast
   const goAction = (target) => {
     if (locked) {
       toast.info(status === 'pending'
@@ -55,7 +74,7 @@ export default function OwnerDashboard() {
     setView(target)
   }
 
-  // ★ 연동 취소 (pending/rejected → owner_id 해제)
+  // [F-7] 연동 취소 (pending/rejected → owner_id 해제)
   const cancel = async () => {
     if (!store) return
     const msg = status === 'rejected'
@@ -65,19 +84,26 @@ export default function OwnerDashboard() {
     try {
       await OwnerApi.cancelClaim(store.id)
       toast.success('연동이 취소되었습니다.')
-      await refresh()        // user_type 메모리 갱신
-      await load()
+      await refresh()   // user_type 메모리 갱신
+      invalidateOwner()
     } catch (e) {
       toast.error(e.message)
     }
   }
 
-  if (loading) return <MobileFrame><div className="ow-loading">정보를 불러오는 중…</div></MobileFrame>
+  // [TanStack Query] owner 데이터 무효화 헬퍼
+  const invalidateOwner = () => {
+    queryClient.invalidateQueries({ queryKey: ['owner', 'my-store', user.id] })
+    queryClient.invalidateQueries({ queryKey: ['owner', 'verification-status'] })
+  }
 
+  if (storeLoading) return <MobileFrame><div className="ow-loading">정보를 불러오는 중…</div></MobileFrame>
+
+  // [F-9] search ← 마이페이지로 (뒤로가기 갇힘 해소)
   if (view === 'search')
     return (
       <StoreSearch
-        onBack={() => navigate('/mypage', { replace: true })}   // ★ 마이페이지로 (뒤로가기 갇힘 해소)
+        onBack={() => navigate('/mypage', { replace: true })}
         onClaim={(s) => { setClaimTarget(s); setView('registration') }}
         onRegister={() => { setClaimTarget(null); setView('registration') }}
       />
@@ -88,24 +114,24 @@ export default function OwnerDashboard() {
       <StoreRegistration
         initialData={claimTarget}
         onBack={() => setView('dashboard')}
-        onDone={() => { setView('dashboard'); load() }}
+        onDone={() => { setView('dashboard'); invalidateOwner() }}
       />
     )
 
-  // ★ store 가드: store 없으면 edit/menu 렌더 불가 (진동 방지)
+  // [F-8] store 가드
   if (view === 'menu' && store)
-    return <MenuManager store={store} onBack={() => setView('dashboard')} onSaved={load} />
+    return <MenuManager store={store} onBack={() => setView('dashboard')} onSaved={invalidateOwner} />
 
+  // [F-8] store 가드 + [F-6] onDisconnected 원자 초기화 + refresh
   if (view === 'edit' && store)
     return (
       <StoreEdit
         store={store}
         onBack={() => setView('dashboard')}
-        onChanged={load}
-        onDisconnected={async () => {       // ★ 원자 초기화 + refresh
-          await refresh()                    // user_type 메모리 갱신 (owner→member 반영)
-          setStore(null)
-          setStatus(null)
+        onChanged={invalidateOwner}
+        onDisconnected={async () => {
+          await refresh()        // user_type 메모리 갱신 (owner→member)
+          invalidateOwner()      // TanStack Query 캐시 무효화
           setClaimTarget(null)
           setView('search')
         }}
@@ -122,7 +148,7 @@ export default function OwnerDashboard() {
         </div>
       </header>
 
-      {/* ★ pending 배너: 계속 작성 + 연동 취소 */}
+      {/* [F-7] pending 배너: 계속 작성 + 연동 취소 */}
       {status === 'pending' && (
         <div className="ow-banner ow-banner-warn">
           <span>⏳</span>
@@ -137,7 +163,7 @@ export default function OwnerDashboard() {
         </div>
       )}
 
-      {/* ★ rejected 배너: 재제출 + 연동 취소 */}
+      {/* [F-7] rejected 배너: 재제출 + 연동 취소 */}
       {status === 'rejected' && (
         <div className="ow-banner ow-banner-danger">
           <span>🚫</span>
