@@ -1,10 +1,23 @@
 // src/shared/ui/ErrorBoundary.jsx
+
 import { Component } from 'react'
+import { Sentry } from '@/core/lib/sentry'   // ← 추가
 
 export default class ErrorBoundary extends Component {
   state = { hasError: false }
-  static getDerivedStateFromError() { return { hasError: true } }
-  componentDidCatch(error, info) { console.error('[ErrorBoundary]', error, info.componentStack) }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[ErrorBoundary]', error, info.componentStack)
+    // [Phase 5] Sentry에 에러 보고
+    Sentry.captureException(error, {
+      extra: { componentStack: info.componentStack },
+    })
+  }
+
   render() {
     if (!this.state.hasError) return this.props.children
     return (
