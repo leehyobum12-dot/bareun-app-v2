@@ -482,3 +482,10 @@
     background: var(--surface);
     overflow: hidden;
 }
+/* 필드 검증 에러 (Phase 2) */
+.field-error {
+  color: var(--danger-600, #D93025);
+  font-size: var(--text-xs, 12px);
+  margin-top: 6px;
+  font-weight: 600;
+}
