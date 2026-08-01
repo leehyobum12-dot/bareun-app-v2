@@ -1,6 +1,7 @@
 // domains/restaurant/pages/Home.jsx
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -34,13 +35,6 @@ export default function Home() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [restaurants, setRestaurants] = useState([]);
-  const [markers, setMarkers] = useState([]);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-
   const [search, setSearch] = useState('');
   const debounced = useDebounce(search, 500);
   const [district, setDistrict] = useState('전체 지역');
@@ -58,42 +52,70 @@ export default function Home() {
     keyword: debounced.trim() || null,
   }), [district, emd, bizType, debounced, user?.healthProfile]);
 
-  const load = useCallback(async (p, reset = false) => {
-    if (userLoc && p > 0) return;
-    reset ? setLoading(true) : setLoadingMore(true);
-    try {
-      const list = userLoc
-        ? await RestaurantApi.listNearby({ lat: userLoc[0], lng: userLoc[1], filters, page: p })
-        : await RestaurantApi.listByFilter({ filters, page: p });
-      setRestaurants(prev => (reset ? list : [...prev, ...list]));
-      setHasMore(userLoc ? false : list.length === PAGE_SIZE);
-      setPage(p);
-      if (reset) setMarkers(await RestaurantApi.listMarkers({ filters }));
-    } catch (e) {
-      toast.error(e.message || '식당을 불러오지 못했습니다.');
-      setHasMore(false);
-    } finally {
-      setLoading(false); setLoadingMore(false);
-    }
-  }, [filters, userLoc, toast]);
+  /*
+   * [TanStack Query] 식당 목록 — 무한 스크롤
+   * - queryKey에 filters/userLoc 포함 → 필터 변경 시 자동 리페치
+   * - getNextPageParam: userLoc 모드(근처)는 페이지네이션 없음
+   * - 5분 캐시 (staleTime), 2회 재시도 (retry)
+   */
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    error,
+  } = useInfiniteQuery({
+    queryKey: ['restaurants', filters, userLoc],
+    queryFn: ({ pageParam = 0 }) =>
+      userLoc
+        ? RestaurantApi.listNearby({ lat: userLoc[0], lng: userLoc[1], filters, page: pageParam })
+        : RestaurantApi.listByFilter({ filters, page: pageParam }),
+    getNextPageParam: (lastPage, allPages) => {
+      if (userLoc) return undefined;
+      return lastPage.length === PAGE_SIZE ? allPages.length : undefined;
+    },
+  });
 
-  useEffect(() => { load(0, true); }, [load]);
+  const restaurants = data?.pages.flat() ?? [];
 
+  /*
+   * [TanStack Query] 지도 마커 — 별도 쿼리
+   * - filters만 의존 (userLoc 무관)
+   * - 식당 목록과 독립적으로 캐싱
+   */
+  const { data: markers = [] } = useQuery({
+    queryKey: ['markers', filters],
+    queryFn: () => RestaurantApi.listMarkers({ filters }),
+  });
+
+  // 에러 토스트
+  useEffect(() => {
+    if (isError) toast.error(error?.message || '식당을 불러오지 못했습니다.');
+  }, [isError, error, toast]);
+
+  // 스크롤 감지 (헤더 그림자)
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  /*
+   * [TanStack Query] IntersectionObserver → fetchNextPage
+   * - hasNextPage / isFetchingNextPage 자동 관리
+   * - userLoc 모드에서는 무한 스크롤 비활성
+   */
   useEffect(() => {
-    if (!sentinelRef.current || !hasMore || loadingMore || loading || userLoc) return;
+    if (!sentinelRef.current || !hasNextPage || isFetchingNextPage || isLoading || userLoc) return;
     const obs = new IntersectionObserver(
-      entries => { if (entries[0].isIntersecting) load(page + 1); },
+      entries => { if (entries[0].isIntersecting) fetchNextPage(); },
       { rootMargin: '200px' }
     );
     obs.observe(sentinelRef.current);
     return () => obs.disconnect();
-  }, [page, hasMore, loadingMore, loading, load, userLoc]);
+  }, [hasNextPage, isFetchingNextPage, isLoading, fetchNextPage, userLoc]);
 
   const locate = async () => {
     try {
@@ -122,7 +144,7 @@ export default function Home() {
           </div>
         </header>
 
-        {/* ── 오늘의 식단 가이드: 이 앱의 정체성을 여는 첫 화면 ── */}
+        {/* ── 오늘의 식단 가이드 ── */}
         <section className="guide reveal">
           <p className="guide-date">
             {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
@@ -188,7 +210,7 @@ export default function Home() {
             <span>{restaurants.length}곳</span>
           </div>
 
-          {loading ? (
+          {isLoading ? (
             <>{[0, 1, 2].map(i => <SkeletonCard key={i} />)}</>
           ) : restaurants.length === 0 ? (
             debounced
@@ -234,9 +256,9 @@ export default function Home() {
             })
           )}
 
-          {loadingMore && <SkeletonCard />}
-          {hasMore && !loading && <div ref={sentinelRef} style={{ height: 10 }} />}
-          {!hasMore && restaurants.length > 0 && <p className="feed-end">마지막 식당입니다 🍽️</p>}
+          {isFetchingNextPage && <SkeletonCard />}
+          {hasNextPage && !isLoading && <div ref={sentinelRef} style={{ height: 10 }} />}
+          {!hasNextPage && restaurants.length > 0 && <p className="feed-end">마지막 식당입니다 🍽️</p>}
         </div>
 
         <p className="disclaimer">
