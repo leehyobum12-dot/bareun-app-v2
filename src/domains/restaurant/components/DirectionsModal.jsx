@@ -6,7 +6,7 @@ import L from 'leaflet'
 import Button from '@/shared/ui/Button'
 import { useToast } from '@/app/providers/ToastProvider'
 import { getDirections } from '../api/directions.api'
-import { openExternalLink } from '@/core/utils/openLink'
+import { openDriveNavigation } from '@/core/utils/openLink'
 
 /* 지도 범위를 경로 전체에 자동 맞춤 */
 function FitBounds({ points }) {
@@ -156,9 +156,7 @@ export default function DirectionsModal({ restaurant, userLoc, onClose }) {
             <div className="dir-actions">
               <Button
                 block
-                onClick={() => openExternalLink(
-                  `https://map.kakao.com/link/drive/${encodeURIComponent(restaurant.store_name)},${restaurant.lat},${restaurant.lng}`
-                )}
+                onClick={() => openDriveNavigation({ name: restaurant.store_name, lat: restaurant.lat, lng: restaurant.lng })}
               >
                 🚗 자동차 길찾기 (카카오맵)
               </Button>

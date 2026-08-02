@@ -1,6 +1,6 @@
 // domains/restaurant/pages/Home.jsx
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -25,6 +25,7 @@ import { useFilterStore } from '../stores/filterStore';
 import './Home.css';
 import DirectionsModal from '../components/DirectionsModal';
 import { openExternalLink } from '@/core/utils/openLink';
+import RestaurantDetailModal from '../components/RestaurantDetailModal';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -36,6 +37,7 @@ L.Icon.Default.mergeOptions({
 export default function Home() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { storeId } = useParams();
   const toast = useToast();
 
   // [Zustand] 필터 상태 — 컴포넌트 내부에서 호출
@@ -47,6 +49,7 @@ export default function Home() {
   const [scrolled, setScrolled] = useState(false);
   const sentinelRef = useRef(null);
   const [directionsTarget, setDirectionsTarget] = useState(null);
+  const [detailTarget, setDetailTarget] = useState(null);
 
   const filters = useMemo(() => ({
     district: district !== '전체 지역' ? district : null,
@@ -105,6 +108,20 @@ export default function Home() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  /*
+ * [7-c-1b] URL → 상세 모달 동기화 (인바운드 딥링크)
+ * - /r/:storeId 진입 시 해당 식당의 상세 모달 자동 open
+ * - 목록에 있으면 재조회 없이 사용, 없으면(다른 지역/페이지) 단건 조회
+ */
+  useEffect(() => {
+    if (!storeId) { setDetailTarget(null); return; }
+    const found = restaurants.find(r => String(r.id) === String(storeId));
+    if (found) { setDetailTarget(found); return; }
+    RestaurantApi.getById(storeId)
+      .then(r => r ? setDetailTarget(r) : toast.error('식당을 찾을 수 없습니다.'))
+      .catch(() => toast.error('식당을 불러오지 못했습니다.'));
+  }, [storeId, restaurants, toast]);
 
   /*
    * [TanStack Query] IntersectionObserver → fetchNextPage
@@ -227,6 +244,16 @@ export default function Home() {
                 ? distanceKm(userLoc[0], userLoc[1], r.lat, r.lng).toFixed(1) + 'km' : r.si;
               return (
                 <article key={r.id} className="card card-hover r-card reveal" style={{ '--d': `${Math.min(i, 8) * 45}ms` }}>
+                  {/* ① 뱃지 좌상 / 업종 우상 */}
+                  <div className="r-card-badges r-card-badges-top">
+                    <div className="r-card-badges-left">
+                      <SodiumBadge sodium={r.est_sodium_mg} isMeasurable={r.is_measurable} />
+                      {(r.certs ?? '').split(',').map(c => c.trim()).filter(Boolean).map(c => <CertBadge key={c} cert={c} />)}
+                    </div>
+                    <span className="r-card-biz">{r.biz_type}</span>
+                  </div>
+
+                  {/* ② 이름 + 거리 + 주소 축약 1줄 */}
                   <div className="r-card-top">
                     <div className="r-card-emoji">🍲</div>
                     <div className="r-card-body">
@@ -234,17 +261,17 @@ export default function Home() {
                         <h3>{r.store_name}</h3>
                         <span className="r-card-dist">🚶 {dist}</span>
                       </div>
-                      <p className="r-card-addr">📍 {r.road_name || `${r.si} ${r.emd}`}</p>
+                      <p className="r-card-addr">📍 {r.emd ? `${r.si ?? ''} ${r.emd}`.trim() : (r.road_name || r.si)}</p>
                       <p className="r-card-menu">{r.main_menu}</p>
                     </div>
                   </div>
-                  <div className="r-card-badges">
-                    <div className="r-card-badges-left">
-                      <SodiumBadge sodium={r.est_sodium_mg} isMeasurable={r.is_measurable} />
-                      {(r.certs ?? '').split(',').map(c => c.trim()).filter(Boolean).map(c => <CertBadge key={c} cert={c} />)}
-                    </div>
-                    <span className="r-card-biz">{r.biz_type}</span>
-                  </div>
+
+                  {/* ③ 가게 상세보기 — full-width, 예약/길찾기 위 */}
+                  <Button variant="ghost" block className="r-card-detail" onClick={() => navigate(`/r/${r.id}`)}>
+                    가게 상세보기
+                  </Button>
+
+                  {/* ④ 예약 / 길찾기 2열 */}
                   <div className="r-card-actions">
                     <Button variant="ghost" className="r-card-btn" disabled={!isSafeUrl(r.naver_url)}
                       onClick={() => isSafeUrl(r.naver_url) && openExternalLink(r.naver_url)}>
@@ -275,6 +302,14 @@ export default function Home() {
           restaurant={directionsTarget}
           userLoc={userLoc}
           onClose={() => setDirectionsTarget(null)}
+        />
+      )}
+
+      {detailTarget && (
+        <RestaurantDetailModal
+          restaurant={detailTarget}
+          onClose={() => navigate('/')}
+          onDirections={(r) => { navigate('/'); setDirectionsTarget(r); }}
         />
       )}
     </MobileFrame>

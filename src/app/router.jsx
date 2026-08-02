@@ -148,6 +148,7 @@ const router = createBrowserRouter([
         element: <RequireOnboarded />,
         children: [
           { path: '/', element: <Landing /> },
+          { path: '/r/:storeId', element: page(Home) },
           { path: '/mypage', element: page(MyPage) },
 
           /*

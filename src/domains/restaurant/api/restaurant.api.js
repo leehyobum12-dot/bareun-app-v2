@@ -1,6 +1,6 @@
 // domains/restaurant/api/restaurant.api.js
 import { rpc, from } from '@/core/lib/api';
-import { PAGE_SIZE } from '../constants';
+import { PAGE_SIZE, RESTAURANT_PUBLIC_COLUMNS } from '../constants';
 
 /**
  * [계약] 페이지는 이 객체만 압니다.
@@ -15,8 +15,20 @@ export const RestaurantApi = {
     }, '식당 목록을 불러오지 못했습니다.');
   },
 
+  /* [7-c-1b] 인바운드 딥링크용 단건 조회 */
+  async getById(id) {
+    const { data, error } = await from('restaurants')
+      .select(RESTAURANT_PUBLIC_COLUMNS)
+      .eq('id', id)
+      .eq('is_verified', true)
+      .eq('is_closed', false)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
   async listByFilter({ filters, page }) {
-    let q = from('restaurants').select('*').eq('is_verified', true).eq('is_closed', false);
+    let q = from('restaurants').select(RESTAURANT_PUBLIC_COLUMNS).eq('is_verified', true).eq('is_closed', false);
     if (filters.district) q = q.eq('si', filters.district);
     if (filters.emd) q = q.eq('emd', filters.emd);
     if (filters.bizType) q = q.like('biz_type', `%${filters.bizType}%`);
