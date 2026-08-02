@@ -6,10 +6,10 @@ const config: CapacitorConfig = {
   appName: '바른인증식당',
   webDir: 'dist',
 
-  // server: {
-  //   // Android에서 https 스킴 사용 (Supabase Auth PKCE 호환)
-  //   androidScheme: 'https',
-  // },
+  server: {
+    // Android에서 https 스킴 사용 (Supabase Auth PKCE 호환)
+    androidScheme: 'https',
+  },
 
   plugins: {
     // 스플래시 스크린

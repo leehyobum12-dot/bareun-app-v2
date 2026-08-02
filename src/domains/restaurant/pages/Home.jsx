@@ -23,6 +23,8 @@ import { isSafeUrl } from '@/core/security/validators';
 import { PAGE_SIZE } from '../constants';
 import { useFilterStore } from '../stores/filterStore';
 import './Home.css';
+import DirectionsModal from '../components/DirectionsModal';
+import { openExternalLink } from '@/core/utils/openLink';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -44,6 +46,7 @@ export default function Home() {
   const [userLoc, setUserLoc] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const sentinelRef = useRef(null);
+  const [directionsTarget, setDirectionsTarget] = useState(null);
 
   const filters = useMemo(() => ({
     district: district !== '전체 지역' ? district : null,
@@ -217,7 +220,7 @@ export default function Home() {
             debounced
               ? <EmptyState icon="🔍" title={`'${search}' 검색 결과가 없어요`} description="다른 키워드로 검색해 보세요." />
               : <EmptyState icon="🍽️" title="조건에 맞는 식당이 없어요" description="동네를 바꾸거나 건강 필터를 확인해 보세요."
-                  actionLabel="전체 지역으로" onAction={() => reset()} />
+                actionLabel="전체 지역으로" onAction={() => reset()} />
           ) : (
             restaurants.map((r, i) => {
               const dist = userLoc && r.lat && r.lng
@@ -244,11 +247,11 @@ export default function Home() {
                   </div>
                   <div className="r-card-actions">
                     <Button variant="ghost" className="r-card-btn" disabled={!isSafeUrl(r.naver_url)}
-                      onClick={() => isSafeUrl(r.naver_url) && window.open(r.naver_url, '_blank', 'noopener,noreferrer')}>
+                      onClick={() => isSafeUrl(r.naver_url) && openExternalLink(r.naver_url)}>
                       📅 예약하기
                     </Button>
                     <Button className="r-card-btn" disabled={!r.lat || !r.lng}
-                      onClick={() => r.lat && r.lng && window.open(`https://map.kakao.com/link/to/${encodeURIComponent(r.store_name)},${r.lat},${r.lng}`, '_blank', 'noopener,noreferrer')}>
+                      onClick={() => r.lat && r.lng && setDirectionsTarget(r)}>
                       🗺️ 길찾기
                     </Button>
                   </div>
@@ -266,6 +269,14 @@ export default function Home() {
           ⚠️ 본 서비스는 공공데이터 기반 필터링 정보이며, 의학적 진단·처방을 대신할 수 없습니다. 취식 전 담당 의사와 상의하십시오.
         </p>
       </div>
+
+      {directionsTarget && (
+        <DirectionsModal
+          restaurant={directionsTarget}
+          userLoc={userLoc}
+          onClose={() => setDirectionsTarget(null)}
+        />
+      )}
     </MobileFrame>
   );
 }

@@ -79,6 +79,16 @@ export default defineConfig({
     }),
   ],
 
+  server: {
+    proxy: {
+      '/naver-api': {
+        target: 'https://naveropenapi.apigw.ntruss.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/naver-api/, ''),
+      },
+    },
+  },
+
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
