@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">바른인증식당</string>
+    <string name="title_activity_main">바른인증식당</string>
+    <string name="package_name">com.bareun.restaurant</string>
+    <string name="custom_url_scheme">com.bareun.restaurant</string>
+</resources>
