@@ -38,5 +38,21 @@
 .mp-withdraw button{border:0;background:none;color:var(--ink-300);font-size:var(--text-sm);text-decoration:underline;padding:10px}
 .mp-footer{text-align:center;padding:0 24px calc(40px + env(safe-area-inset-bottom))}
 .mp-footer p{font-size:var(--text-xs);color:var(--ink-300);line-height:1.7}
-.mp-menu-row.mp-logout strong { color: var(--ink-500); }
-.mp-menu-row.mp-logout .mp-menu-chev { color: var(--ink-300); }
+
+/* ── 알림 목록 ── */
+.mp-notis{display:flex;flex-direction:column;gap:8px}
+.mp-noti{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-md);padding:12px 14px;cursor:pointer;transition:background .15s}
+.mp-noti strong{display:block;font-size:var(--text-sm);font-weight:800}
+.mp-noti p{font-size:var(--text-xs);color:var(--ink-500);margin-top:4px;line-height:1.5}
+.mp-noti em{display:block;font-style:normal;font-size:10px;color:var(--ink-300);margin-top:6px}
+.mp-noti:not(.read){background:var(--brand-50);border-color:var(--brand-100)}
+.mp-noti:not(.read) strong{color:var(--brand-700)}
+.mp-alarm-toggle{
+  position:absolute;
+  top:12px;
+  right:12px;
+  z-index:2;
+  border:1px solid rgba(255,255,255,.7);
+  background:rgba(255,255,255,.18);
+  color:#fff;
+  padding:6px 12px;}

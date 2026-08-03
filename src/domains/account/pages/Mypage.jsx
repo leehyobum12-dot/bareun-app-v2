@@ -1,9 +1,13 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MobileFrame from '@/shared/ui/MobileFrame'
 import { useAuth } from '@/domains/auth'
 import { useToast } from '@/app/providers/ToastProvider'
 import { DISEASE_CATEGORIES } from '@/domains/onboarding/constants'
 import { AccountApi } from '../api/account.api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { requestPushPermission, getPushState, disablePush } from '@/core/lib/push'
+import { supabase } from '@/core/lib/supabase'
 import './account.css'
 
 const STAGE_LABEL = { stage1: '1단계', stage2: '2단계', grade1: '1등급', grade2: '2등급' }
@@ -13,6 +17,48 @@ export default function MyPage() {
   const toast = useToast()
   const navigate = useNavigate()
   const isOwner = user?.userType === 'owner'
+  const queryClient = useQueryClient()
+  const [pushOn, setPushOn] = useState(false)
+  useEffect(() => {
+    refresh?.()
+    getPushState().then(s => setPushOn(s === 'on'))
+  }, [])
+
+  /* [알림] 목록 조회 */
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20)
+      return data ?? []
+    },
+  })
+
+  /* [알림] 클릭 → 읽음 처리 + 딥링크 이동 */
+  const handleNotiClick = async (n) => {
+    if (!n.is_read) {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', n.id)
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    }
+    if (n.deeplink) navigate(n.deeplink)
+  }
+  const handleTogglePush = async () => {
+    if (pushOn) {
+      await disablePush()
+      setPushOn(false)
+      toast.success('알림을 껐습니다.')
+    } else {
+      console.log('[push] VAPID_PUBLIC:', import.meta.env.VITE_VAPID_PUBLIC_KEY ? '설정됨' : '미설정')
+      console.log('[push] SW 지원:', 'serviceWorker' in navigator)
+      const r = await requestPushPermission()
+      console.log('[push] 결과:', JSON.stringify(r))
+      if (r.ok) { setPushOn(true); toast.success('알림이 켰습니다.') }
+      else toast.error(`알림을 켤 수 없습니다 (${r.reason})`)
+    }
+  }
 
   const providerBadge = (p) => {
     if (p === 'kakao') return <span className="mp-provider mp-kakao">💬 카카오 계정 연동</span>
@@ -38,8 +84,6 @@ export default function MyPage() {
     } catch (e) { toast.error(`탈퇴 처리 중 문제가 발생했습니다: ${e.message}`) }
   }
 
-
-
   return (
     <MobileFrame>
       <div className="mp-topbar">
@@ -48,7 +92,16 @@ export default function MyPage() {
       </div>
 
       <section className="mp-profile reveal">
-        <div className="mp-cover" />
+        <div className="mp-cover">
+          {/* 🔔 알림 On/Off 토글 — 커버 오른쪽 상단 */}
+          <button
+            className={`mp-alarm-toggle ${pushOn ? 'on' : ''}`}
+            onClick={handleTogglePush}
+            aria-label={pushOn ? '알림 끄기' : '알림 켜기'}
+          >
+            {pushOn ? '🔔 알림 ON' : '🔕 알림 OFF'}
+          </button>
+        </div>
         <div className="mp-avatar">{(user?.name ?? '?').slice(0, 1)}</div>
         <div className="mp-profile-body">
           <h2>{user?.name}</h2>
@@ -94,20 +147,43 @@ export default function MyPage() {
         )}
       </section>
 
+      {/* 🔔 알림 목록 */}
+      <section className="card mp-section reveal" style={{ '--d': '130ms' }}>
+        <div className="mp-section-head">
+          <strong>🔔 알림</strong>
+        </div>
+        {notifications.length === 0 ? (
+          <p className="mp-empty">도착한 알림이 없어요.</p>
+        ) : (
+          <div className="mp-notis">
+            {notifications.map((n) => (
+              <button
+                key={n.id}
+                className={`mp-noti ${n.is_read ? 'read' : ''}`}
+                onClick={() => handleNotiClick(n)}
+              >
+                <strong>{n.title}</strong>
+                <p>{n.body}</p>
+                <em>{new Date(n.created_at).toLocaleString('ko-KR')}</em>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="mp-menu reveal" style={{ '--d': '140ms' }}>
         {[
-          { icon: '🔔', title: '알림 설정', desc: '식당 업데이트 알림' },
+
           { icon: '💗', title: '찜한 식당', desc: '저장한 식당 목록 보기' },
           { icon: '💬', title: '이용 문의', desc: '불편사항 및 개선 요청' },
         ].map((m) => (
-          <div key={m.title} className="mp-menu-row">
+          <div key={m.title} className="mp-menu-row" onClick={m.onClick}>
             <span className="mp-menu-ic">{m.icon}</span>
             <div><strong>{m.title}</strong><small>{m.desc}</small></div>
             <span className="mp-menu-chev">›</span>
           </div>
         ))}
-
-        {/* ★ 로그아웃 — 기존 클래스 재사용, 신규 CSS 없음 */}
+        {/* 로그아웃 행은 기존 그대로 유지 */}
         <div
           className="mp-menu-row"
           onClick={handleLogout}

@@ -3,7 +3,14 @@ import { supabase } from '@/core/lib/supabase'
 
 const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY
 
-/* 알림 켜기 — 권한 요청 → subscribe → device_tokens upsert(멱등) */
+export async function getPushState() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !VAPID_PUBLIC) return 'unsupported'
+  if (Notification.permission !== 'granted') return 'off'
+  const reg = await navigator.serviceWorker.ready
+  const sub = await reg.pushManager.getSubscription()
+  return sub ? 'on' : 'off'
+}
+
 export async function requestPushPermission() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !VAPID_PUBLIC) {
     return { ok: false, reason: 'unsupported' }
@@ -34,8 +41,22 @@ export async function requestPushPermission() {
   return { ok: !error, reason: error?.message }
 }
 
-function urlBase64ToUint8Array(s) {
-  const padding = '='.repeat((4 - (s.length % 4)) % 4)
-  const raw = atob((s + padding).replace(/-/g, '+').replace(/_/g, '/'))
+export async function disablePush() {
+  const reg = await navigator.serviceWorker.ready
+  const sub = await reg.pushManager.getSubscription()
+  if (!sub) return { ok: true }
+  const endpoint = sub.endpoint
+  await sub.unsubscribe()
+  const { data } = await supabase.auth.getUser()
+  if (data.user) {
+    await supabase.from('device_tokens').delete().match({ user_id: data.user.id, token: endpoint })
+  }
+  return { ok: true }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(base64)
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)))
 }

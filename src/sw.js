@@ -13,8 +13,13 @@ cleanupOutdatedCaches()
 // 빌드 자산 precache
 precacheAndRoute(self.__WB_MANIFEST)
 
-// SPA 내비게이션 폴백 (구 navigateFallback)
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')))
+// SPA 내비게이션 폴백 — precache 된 index.html 이 있을 때만(prod).
+// dev 에서는 없어서 에러가 나므로 try-catch 로 스킵 → push 리스너는 살아있음
+try {
+  registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')))
+} catch (e) {
+  console.warn('[sw] NavigationRoute 스킵 (dev):', e.message)
+}
 
 // ── 기존 runtimeCaching 이관 ──
 registerRoute(
