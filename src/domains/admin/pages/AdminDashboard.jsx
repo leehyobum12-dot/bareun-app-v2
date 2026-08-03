@@ -1,5 +1,5 @@
 // src/domains/admin/pages/AdminDashboard.jsx
-
+import { supabase } from '@/core/lib/supabase'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import MobileFrame from '@/shared/ui/MobileFrame'
@@ -44,9 +44,21 @@ export default function AdminDashboard() {
       approve ? await AdminApi.approve(item) : await AdminApi.reject(item)
       toast.success(`${approve ? '승인' : '반려'} 처리되었습니다.`)
       setPreview(null)
-      // [TanStack Query] 서버 상태 무효화 → 자동 리페치
-      // 수동 setItems(filter) 불필요
       queryClient.invalidateQueries({ queryKey: ['admin', 'pending-verifications'] })
+
+      /* [7-c-2c] 승인/반려 → owner 에게 푸시 알림 */
+      if (item.owner_id) {
+        await supabase.functions.invoke('send-push', {
+          body: {
+            userIds: [item.owner_id],
+            title: approve ? '가게 승인 완료 🎉' : '가게 심사 반려',
+            body: approve
+              ? '바른인증식당에 가게가 등록되었습니다.'
+              : '제출하신 서류가 반려되었습니다. 사유를 확인해 주세요.',
+            deeplink: '/owner',
+          },
+        }).catch(() => { })   // 푸시 실패가 승인 처리를 막지 않도록
+      }
     } catch (e) { toast.error(e.message) }
     finally { setBusyId(null) }
   }
