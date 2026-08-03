@@ -17,6 +17,12 @@ export default defineConfig({
      */
     VitePWA({
       registerType: 'autoUpdate',
+
+      /* [추가 ①] injectManifest 전환 */
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
+
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
         name: '바른인증식당',
@@ -34,47 +40,8 @@ export default defineConfig({
           { src: 'icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        navigateFallback: 'index.html',
-        runtimeCaching: [
-          {
-            // Supabase API: NetworkFirst (온라인 우선, 오프라인 시 캐시)
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
-            },
-          },
-          {
-            // OSM 타일: CacheFirst (지도 타일은 변경 드묾)
-            urlPattern: /^https:\/\/.*\.tile\.openstreetmap\.org\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'osm-tiles',
-              expiration: { maxEntries: 100, maxAgeSeconds: 7 * 24 * 60 * 60 },
-            },
-          },
-          {
-            // Leaflet CDN: CacheFirst
-            urlPattern: /^https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/leaflet\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'leaflet-cdn',
-              expiration: { maxEntries: 10, maxAgeSeconds: 30 * 24 * 60 * 60 },
-            },
-          },
-          {
-            // 다음 우편번호: CacheFirst
-            urlPattern: /^https:\/\/t1\.daumcdn\.net\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'daum-postcode',
-              expiration: { maxEntries: 5, maxAgeSeconds: 30 * 24 * 60 * 60 },
-            },
-          },
-        ],
+      injectManifest: {
+         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
       },
     }),
   ],
