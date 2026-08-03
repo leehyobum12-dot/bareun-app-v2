@@ -173,7 +173,6 @@ export default function MyPage() {
 
       <section className="mp-menu reveal" style={{ '--d': '140ms' }}>
         {[
-
           { icon: '💗', title: '찜한 식당', desc: '저장한 식당 목록 보기' },
           { icon: '💬', title: '이용 문의', desc: '불편사항 및 개선 요청' },
         ].map((m) => (
