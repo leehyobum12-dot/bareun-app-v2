@@ -11,7 +11,7 @@ import { BIZ_TYPE } from '@/shared/constants/tag'
 import { validateImageFile } from '@/core/security/validators'
 import { OwnerApi } from '../api/owner.api'
 import { DAYS_OF_WEEK } from '../constants'
-import {  CERT_OPTIONS } from '@/shared/constants/cert'
+import { CERT_OPTIONS } from '@/shared/constants/cert'
 import { storeRegistrationSchema } from '../schemas/storeSchemas'
 import './owner.css'
 
@@ -68,13 +68,13 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
   // [F-4] 파일 상태 (RHF 부적합 — useState 유지)
   const [bizFile, setBizFile] = useState(null)
   const [bizPreview, setBizPreview] = useState('')
-  const [certFiles, setCertFiles] = useState({})
+  const [certFiles, setCertFiles] = useState({}) // { '식품안심업소': { file, preview }, ... }
 
-  const certInputId = (cert) => `cert-${String(cert).replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase()}`
-
-  useEffect(() => () => {
-    if (bizPreview) URL.revokeObjectURL(bizPreview)
-    Object.values(certFiles).forEach((f) => f.preview && URL.revokeObjectURL(f.preview))
+  useEffect(() => {
+    return () => {
+      if (bizPreview) URL.revokeObjectURL(bizPreview)
+      Object.values(certFiles).forEach((f) => f.preview && URL.revokeObjectURL(f.preview))
+    }
   }, [bizPreview, certFiles])
 
   const toggleDay = (d) => {
@@ -89,13 +89,33 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
       ? certs.filter((x) => x !== c)
       : [...certs, c]
     setValue('certs', next)
+
+    // [추가] 배지 해제 시 해당 파일도 제거
+    if (!next.includes(c) && certFiles[c]) {
+      URL.revokeObjectURL(certFiles[c].preview)
+      setCertFiles((prev) => {
+        const updated = { ...prev }
+        delete updated[c]
+        return updated
+      })
+    }
   }
 
   const onBizFile = (e) => {
     const f = e.target.files?.[0]
     if (!f) return
-    const err = validateImageFile(f)
-    if (err) return toast.error(err)
+
+    // [수정] validateImageFile 대신 직접 검증 (파일 개수 제한 없음)
+    if (!f.type.startsWith('image/')) {
+      toast.error('이미지 파일만 업로드 가능합니다.')
+      return
+    }
+    if (f.size > 10 * 1024 * 1024) { // 10MB 제한
+      toast.error('파일 크기는 10MB 이하여야 합니다.')
+      return
+    }
+
+    if (bizPreview) URL.revokeObjectURL(bizPreview)
     setBizFile(f)
     setBizPreview(URL.createObjectURL(f))
   }
@@ -103,10 +123,49 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
   const onCertFile = (cert, e) => {
     const f = e.target.files?.[0]
     if (!f) return
-    const err = validateImageFile(f)
-    if (err) return toast.error(err)
-    setCertFiles((p) => ({ ...p, [cert]: { file: f, preview: URL.createObjectURL(f) } }))
+
+    // 파일 검증
+    if (!f.type.startsWith('image/')) {
+      toast.error('이미지 파일만 업로드 가능합니다.')
+      return
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      toast.error('파일 크기는 10MB 이하여야 합니다.')
+      return
+    }
+
+    // 기존 미리보기 정리
+    if (certFiles[cert]?.preview) {
+      URL.revokeObjectURL(certFiles[cert].preview)
+    }
+
+    // 새 파일 추가
+    setCertFiles((prev) => ({
+      ...prev,
+      [cert]: {
+        file: f,
+        preview: URL.createObjectURL(f)
+      }
+    }))
+
+    // 파일 input 초기화 (같은 파일 재선택 가능)
+    e.target.value = ''
   }
+
+  // [수정] 배지 파일 제거 함수 추가
+  const removeCertFile = (cert) => {
+    if (certFiles[cert]?.preview) {
+      URL.revokeObjectURL(certFiles[cert].preview)
+    }
+    setCertFiles((prev) => {
+      const updated = { ...prev }
+      delete updated[cert]
+      return updated
+    })
+  }
+
+  const certInputId = (cert) => `cert-${String(cert).replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase()}`
+
 
   // [F-2] 주소 검색 → setValue로 RHF 상태 업데이트
   const openPostcode = () => {
@@ -152,7 +211,6 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
   }
 
   const onSubmit = async (data) => {
-    // 파일 검증 (RHF 외부)
     if (!bizFile) return toast.error('사업자등록증 사진을 첨부해 주세요.')
 
     setBusy(true)
@@ -174,10 +232,20 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
         closed_days: data.closed_days,
         certs: data.certs.length ? data.certs.join(',') : null,
         biz_reg_number: data.biz_reg_number,
-        // [F-1] is_verified 의도적 제외
       }
+
+      // [수정] certFiles 객체를 그대로 전달 (한글 키 사용)
       const certPayload = {}
-      for (const c of data.certs) if (certFiles[c]) certPayload[c] = certFiles[c].file
+      for (const c of data.certs) {
+        if (certFiles[c]?.file) {
+          certPayload[c] = certFiles[c].file
+        }
+      }
+
+      console.log('[StoreRegistration] 제출 데이터:', {
+        bizFile: bizFile.name,
+        certPayload: Object.keys(certPayload),
+      })
 
       await OwnerApi.submitRegistration({
         userId: user.id,
@@ -186,14 +254,17 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
         certFiles: certPayload,
         initialStoreId: isClaim ? initial.id : null,
       })
+
       toast.success(isClaim ? '서류가 다시 접수되었습니다.' : '신규 가게 등록이 접수되었습니다. (영업일 1~2일 내 승인)')
       onDone()
     } catch (err) {
-      toast.error(err.message)
+      console.error('[StoreRegistration] 제출 실패:', err)
+      toast.error(err.message || '제출 중 오류가 발생했습니다.')
     } finally {
       setBusy(false)
     }
   }
+
 
   return (
     <>
@@ -243,14 +314,57 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
                 </label>
               ))}
             </div>
+
             {certs.map((c) => (
               <div key={c} className="field" style={{ marginTop: 12 }}>
                 <label className="label">{c} 증명서 사진</label>
-                <input type="file" accept="image/*" onChange={(e) => onCertFile(c, e)} style={{ display: 'none' }} id={certInputId(c)} />
-                <button type="button" className="ow-filebox" onClick={() => document.getElementById(certInputId(c))?.click()}>
-                  <span>📎</span>{certFiles[c] ? '파일 선택 완료 ✓' : `${c} 증명서 첨부`}
-                </button>
-                {certFiles[c]?.preview && <img src={certFiles[c].preview} alt={`${c} 미리보기`} className="ow-preview" style={{ height: 80, objectFit: 'cover' }} />}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => onCertFile(c, e)}
+                    style={{ display: 'none' }}
+                    id={certInputId(c)}
+                  />
+                  <button
+                    type="button"
+                    className="ow-filebox"
+                    onClick={() => document.getElementById(certInputId(c))?.click()}
+                    style={{ flex: 1 }}
+                  >
+                    <span>📎</span>
+                    {certFiles[c] ? '파일 선택 완료 ✓ (클릭하여 변경)' : `${c} 증명서 첨부`}
+                  </button>
+
+                  {/* [추가] 파일 제거 버튼 */}
+                  {certFiles[c] && (
+                    <button
+                      type="button"
+                      onClick={() => removeCertFile(c)}
+                      style={{
+                        padding: '8px 12px',
+                        background: 'var(--danger, #e53935)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                      }}
+                      aria-label={`${c} 증명서 제거`}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* 미리보기 */}
+                {certFiles[c]?.preview && (
+                  <img
+                    src={certFiles[c].preview}
+                    alt={`${c} 미리보기`}
+                    className="ow-preview"
+                    style={{ height: 80, objectFit: 'cover', marginTop: 8 }}
+                  />
+                )}
               </div>
             ))}
 
