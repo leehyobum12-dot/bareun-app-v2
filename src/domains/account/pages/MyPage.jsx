@@ -72,19 +72,32 @@ export default function MyPage() {
   }
 
   const withdraw = async () => {
-  const msg = isOwner
-    ? '정말 탈퇴하시겠습니까?\n사장님으로 등록하신 모든 서류가 파기되고 가게 소유권이 초기화됩니다.'
-    : '정말 탈퇴하시겠습니까?\n저장된 건강 필터와 프로필이 영구 삭제됩니다.'
-  if (!window.confirm(msg)) return
-  try {
-    await AccountApi.withdraw()  // ← user 파라미터 제거 (Edge Function이 JWT에서 추출)
-    await logout()
-    toast.success('회원탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.')
-    navigate('/login', { replace: true })
-  } catch (e) { 
-    toast.error(`탈퇴 처리 중 문제가 발생했습니다: ${e.message}`) 
+    const msg = isOwner
+      ? '정말 탈퇴하시겠습니까?\n사장님으로 등록하신 모든 서류가 파기되고 가게 소유권이 초기화됩니다.\n\n이 작업은 되돌릴 수 없습니다.'
+      : '정말 탈퇴하시겠습니까?\n저장된 건강 필터와 프로필이 영구 삭제됩니다.\n\n이 작업은 되돌릴 수 없습니다.'
+
+    if (!window.confirm(msg)) return
+
+    // [v3.2] 추가 확인 (이중 안전장치)
+    if (!window.confirm('마지막 확인: 정말로 탈퇴하시겠습니까?')) return
+
+    try {
+      // 토스트는 초기화 전에 표시 (localStorage가 삭제되기 때문)
+      toast.success('회원탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.')
+
+      // 탈퇴 + 완전 초기화 실행
+      await AccountApi.withdraw()
+
+      // 짧은 딜레이 후 강제 리로드 (1.5초: 토스트 표시 시간)
+      // window.location.href 대신 assign 사용 (브라우저 히스토리에서 제거)
+      setTimeout(() => {
+        window.location.replace('/login')
+      }, 1500)
+    } catch (e) {
+      console.error('[MyPage] 탈퇴 실패:', e)
+      toast.error(`탈퇴 처리 중 문제가 발생했습니다: ${e.message}`)
+    }
   }
-}
 
   return (
     <MobileFrame>

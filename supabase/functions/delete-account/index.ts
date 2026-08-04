@@ -1,14 +1,14 @@
 // supabase/functions/delete-account/index.ts
 //
-// 회원 탈퇴 Edge Function
+// [v3.2] 회원 탈퇴 Edge Function (단일 트랜잭션)
 //
 // 역할:
-//   1. 로그인한 사용자의 JWT를 검증
-//   2. 사용자 권한으로 delete_user_account() RPC 호출 (비즈니스 데이터 정리)
-//   3. service_role 권한으로 auth.users 삭제 (Admin API)
-//   4. 관련 Storage 파일 정리
+//   1. JWT 검증 (Anon Key)
+//   2. Service Role로 Storage 파일 삭제
+//   3. Service Role로 비즈니스 데이터 정리
+//   4. Auth Admin API로 auth.users 삭제 (CASCADE 자동 발동)
 //
-// 출처: Supabase 공식 문서 - Auth Admin API
+// 출처: Supabase Auth Admin API
 // https://supabase.com/docs/reference/javascript/auth-admin-deleteuser
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -29,24 +29,14 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'POST 요청만 허용됩니다.' }),
-      {
-        status: 405,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 
   try {
     const authHeader = req.headers.get('Authorization')
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: '로그인이 필요합니다.' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new Error('로그인이 필요합니다.')
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -54,47 +44,23 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
     if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-      return new Response(
-        JSON.stringify({
-          error: 'Supabase 환경 변수가 설정되지 않았습니다.',
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
+      throw new Error('Supabase 환경 변수가 설정되지 않았습니다.')
     }
 
-    // 1. 사용자 JWT를 사용하는 클라이언트
+    // ─────────────────────────────────────────────
+    // Step 1: JWT 검증 (Anon Key 사용)
+    // ─────────────────────────────────────────────
     const userClient = createClient(supabaseUrl, anonKey, {
-      global: {
-        headers: {
-          Authorization: authHeader,
-        },
-      },
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
     })
 
-    // 2. 현재 로그인 사용자 확인
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser()
-
+    const { data: { user }, error: userError } = await userClient.auth.getUser()
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: '유효하지 않은 사용자 토큰입니다.' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
+      throw new Error('유효하지 않은 사용자 토큰입니다.')
     }
 
-    // 3. 관리자 계정은 탈퇴 불가
+    // 관리자 계정 방어
     const { data: profile } = await userClient
       .from('profiles')
       .select('user_type')
@@ -102,120 +68,104 @@ Deno.serve(async (req) => {
       .single()
 
     if (profile?.user_type === 'admin') {
-      return new Response(
-        JSON.stringify({ error: '관리자 계정은 탈퇴할 수 없습니다.' }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
+      throw new Error('관리자 계정은 탈퇴할 수 없습니다.')
     }
 
-    // 4. Storage 파일 정리 (사업자 등록증 등 민감 문서)
-    const { data: verifications } = await userClient
+    // ─────────────────────────────────────────────
+    // Step 2: Service Role 클라이언트 준비
+    // ─────────────────────────────────────────────
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+
+    // ─────────────────────────────────────────────
+    // Step A: Storage 파일 경로 수집 (삭제 전에 반드시!)
+    // ─────────────────────────────────────────────
+    const { data: verifications } = await adminClient
       .from('owner_verifications')
       .select('biz_reg_url, cert_paths')
       .eq('owner_id', user.id)
 
     const filesToDelete: string[] = []
-    
     if (verifications && verifications.length > 0) {
       verifications.forEach((v) => {
-        if (v.biz_reg_url) filesToDelete.push(v.biz_reg_url)
-        if (v.cert_paths) {
-          // cert_paths는 jsonb 객체이므로 값들을 추출
+        // 사업자 등록증 경로 수집 (자신의 UID 폴더만)
+        if (v.biz_reg_url?.startsWith(`${user.id}/`)) {
+          filesToDelete.push(v.biz_reg_url)
+        }
+        // 배지 인증서 경로 수집 (4개 키 순회)
+        if (v.cert_paths && typeof v.cert_paths === 'object') {
           Object.values(v.cert_paths).forEach((path) => {
-            if (typeof path === 'string') filesToDelete.push(path)
+            if (typeof path === 'string' && path.startsWith(`${user.id}/`)) {
+              filesToDelete.push(path)
+            }
           })
         }
       })
     }
 
+    // ─────────────────────────────────────────────
+    // Step B: Storage 파일 삭제
+    // ─────────────────────────────────────────────
     if (filesToDelete.length > 0) {
-      const storageAdmin = createClient(supabaseUrl, serviceRoleKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      })
-      
-      const { error: storageError } = await storageAdmin
-        .storage
+      const { error: storageError } = await adminClient.storage
         .from('business_docs')
         .remove(filesToDelete)
 
       if (storageError) {
-        console.error('Storage 파일 삭제 실패:', storageError)
-        // Storage 삭제 실패해도 계속 진행 (DB 정리가 더 중요)
+        console.error('Storage 파일 삭제 실패 (계속 진행):', storageError)
+        // Storage 삭제 실패해도 DB 정리는 계속 진행
       }
     }
 
-    // 5. 사용자 권한으로 delete_user_account() RPC 실행
-    //    restaurants.owner_id 해제, owner_verifications 삭제 등 진행
-    const { error: rpcError } = await userClient.rpc('delete_user_account')
+    // ─────────────────────────────────────────────
+    // Step C: 비즈니스 데이터 정리 (Service Role)
+    // ─────────────────────────────────────────────
 
-    if (rpcError) {
-      console.error('delete_user_account RPC 실패:', rpcError)
-      return new Response(
-        JSON.stringify({
-          error: '회원 탈퇴 데이터 정리 중 오류가 발생했습니다.',
-          detail: rpcError.message,
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
-    }
+    // C-1: 미승인 가게 폐업 처리
+    await adminClient
+      .from('restaurants')
+      .update({ is_closed: true })
+      .eq('owner_id', user.id)
+      .eq('is_verified', false)
 
-    // 6. 관리자 권한으로 실제 auth.users 삭제
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    })
+    // C-2: 모든 가게 소유권 해제 (owner_id → NULL)
+    // FK ON DELETE SET NULL이지만 명시적 해제가 안전
+    await adminClient
+      .from('restaurants')
+      .update({ owner_id: null })
+      .eq('owner_id', user.id)
 
-    const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(
-      user.id
-    )
+    // C-3: 심사 요청 삭제 (CASCADE 있지만 명시적 삭제)
+    await adminClient
+      .from('owner_verifications')
+      .delete()
+      .eq('owner_id', user.id)
 
-    if (deleteUserError) {
-      console.error('auth.admin.deleteUser 실패:', deleteUserError)
-      return new Response(
-        JSON.stringify({
-          error: '인증 서버에서 사용자 삭제 중 오류가 발생했습니다.',
-          detail: deleteUserError.message,
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
+    // ─────────────────────────────────────────────
+    // Step D: auth.users 삭제 (CASCADE 자동 발동)
+    // → profiles, user_health, device_tokens, notifications 자동 삭제
+    // ─────────────────────────────────────────────
+    const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id)
+
+    if (deleteError) {
+      throw new Error(`인증 서버 사용자 삭제 실패: ${deleteError.message}`)
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        message: '회원 탈퇴가 완료되었습니다.',
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ success: true, message: '회원 탈퇴 완료' }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
+
   } catch (error) {
-    console.error('delete-account Edge Function 오류:', error)
-
+    console.error('delete-account Edge Function 에러:', error)
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : '탈퇴 처리 중 알 수 없는 오류 발생'
+    
     return new Response(
-      JSON.stringify({
-        error: '회원 탈퇴 처리 중 예상하지 못한 오류가 발생했습니다.',
-        detail: error instanceof Error ? error.message : String(error),
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ error: errorMessage }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
