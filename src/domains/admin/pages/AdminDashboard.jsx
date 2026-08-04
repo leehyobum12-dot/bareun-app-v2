@@ -8,6 +8,7 @@ import EmptyState from '@/shared/ui/EmptyState'
 import { useToast } from '@/app/providers/ToastProvider'
 import { AdminApi } from '../api/admin.api'
 import { useNavigate } from 'react-router-dom'
+import { CERT_KEY_TO_NAME } from '@/shared/constants/cert'
 import './admin.css'
 
 export default function AdminDashboard() {
@@ -26,10 +27,10 @@ export default function AdminDashboard() {
   })
 
   const viewDoc = async (path, title) => {
-    try { 
-      setPreview({ url: await AdminApi.getSignedUrl(path), title }) 
-    } catch { 
-      toast.error('이미지를 불러오지 못했습니다.') 
+    try {
+      setPreview({ url: await AdminApi.getSignedUrl(path), title })
+    } catch {
+      toast.error('이미지를 불러오지 못했습니다.')
     }
   }
 
@@ -54,10 +55,10 @@ export default function AdminDashboard() {
           },
         }).catch(() => { })
       }
-    } catch (e) { 
-      toast.error(e.message) 
-    } finally { 
-      setBusyId(null) 
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -93,17 +94,17 @@ export default function AdminDashboard() {
           },
         }).catch(() => { })
       }
-    } catch (e) { 
-      toast.error(e.message) 
-    } finally { 
-      setBusyId(null) 
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setBusyId(null)
     }
   }
 
   // cert_paths를 한글 이름으로 변환하여 표시
   const renderCertButtons = (certPaths) => {
     if (!certPaths || typeof certPaths !== 'object') return null
-    
+
     const entries = Object.entries(certPaths).filter(([, path]) => !!path)
     if (entries.length === 0) return null
 
@@ -111,21 +112,16 @@ export default function AdminDashboard() {
       <div className="ad-certs">
         <p>선택 증명서 확인</p>
         {entries.map(([dbKey, path]) => {
-          // DB 키를 한글 이름으로 변환
-          const displayName = {
-            'food_safety': '식품안심업소',
-            'model_restaurant': '모범음식점',
-            'low_sodium': '나트륨 줄이기 실천음식점',
-            'safe_restaurant': '안심식당',
-          }[dbKey] || dbKey
+          // ✅ CERT_KEY_TO_NAME 사용 (SSOT 준수)
+          const displayName = CERT_KEY_TO_NAME[dbKey] || dbKey
 
           return (
-            <Button 
-              key={dbKey} 
-              variant="ghost" 
-              block 
-              size="sm" 
-              onClick={() => viewDoc(path, displayName)} 
+            <Button
+              key={dbKey}
+              variant="ghost"
+              block
+              size="sm"
+              onClick={() => viewDoc(path, displayName)}
               style={{ marginBottom: 6 }}
             >
               📎 {displayName}
@@ -185,22 +181,22 @@ export default function AdminDashboard() {
                   📭 사업자등록증 미제출
                 </Button>
               )}
-              
+
               {/* [v3.2 수정] cert_paths 사용 */}
               {renderCertButtons(item.cert_paths)}
 
               <div className="ad-actions">
-                <Button 
-                  variant="danger-ghost" 
-                  style={{ flex: 1 }} 
-                  disabled={busyId === item.id} 
+                <Button
+                  variant="danger-ghost"
+                  style={{ flex: 1 }}
+                  disabled={busyId === item.id}
                   onClick={() => openRejectModal(item)}
                 >
                   반려
                 </Button>
-                <Button 
-                  style={{ flex: 1 }} 
-                  disabled={busyId === item.id} 
+                <Button
+                  style={{ flex: 1 }}
+                  disabled={busyId === item.id}
                   onClick={() => handleApprove(item)}
                 >
                   승인 (권한 부여)
@@ -252,16 +248,16 @@ export default function AdminDashboard() {
                 }}
               />
               <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                <Button 
-                  variant="ghost" 
-                  block 
+                <Button
+                  variant="ghost"
+                  block
                   onClick={() => setRejectModal(null)}
                 >
                   취소
                 </Button>
-                <Button 
-                  variant="danger" 
-                  block 
+                <Button
+                  variant="danger"
+                  block
                   disabled={busyId === rejectModal.id || !rejectReason.trim()}
                   onClick={handleReject}
                 >

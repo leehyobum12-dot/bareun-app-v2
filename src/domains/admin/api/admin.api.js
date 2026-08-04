@@ -2,7 +2,7 @@
 
 import { from, rpc, run } from '@/core/lib/api'
 import { supabase } from '@/core/lib/supabase'
-import { CERT_KEY_TO_NAME } from '@/shared/cert'
+import { CERT_KEY_TO_NAME } from '@/shared/constants/cert'
 
 export const AdminApi = {
   async getPendingVerifications() {

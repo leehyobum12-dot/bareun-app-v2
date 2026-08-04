@@ -5,21 +5,22 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import MobileFrame from '@/shared/ui/MobileFrame'
 import Button from '@/shared/ui/Button'
+import CertBadge from '@/shared/ui/CertBadge'
 import { useAuth } from '@/domains/auth'
 import { useToast } from '@/app/providers/ToastProvider'
 import { BIZ_TYPE } from '@/shared/constants/tag'
-import { validateImageFile } from '@/core/security/validators'
 import { OwnerApi } from '../api/owner.api'
 import { DAYS_OF_WEEK } from '../constants'
-import { CERT_OPTIONS } from '@/shared/constants/cert'
+import { CERT_OPTIONS, CERT_NAME_TO_KEY } from '@/shared/constants/cert'
 import { storeRegistrationSchema } from '../schemas/storeSchemas'
+import { useAutoFormat } from '@/core/hooks/useAutoFormat'
+import AddressSearchModal from '../components/AddressSearchModal'
 import './owner.css'
 
 export default function StoreRegistration({ initialData, onBack, onDone }) {
   const { user } = useAuth()
   const toast = useToast()
   const fileRef = useRef(null)
-  const postcodeRef = useRef(null)
   const [showAddr, setShowAddr] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -59,6 +60,8 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
     },
     mode: 'onBlur',
   })
+
+  const { handlePhone, handleBizNumber } = useAutoFormat(setValue)
 
   const businessDays = watch('business_days') ?? []
   const certs = watch('certs') ?? []
@@ -164,50 +167,25 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
     })
   }
 
-  const certInputId = (cert) => `cert-${String(cert).replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase()}`
-
-
-  // [F-2] 주소 검색 → setValue로 RHF 상태 업데이트
-  const openPostcode = () => {
-    setShowAddr(true)
-    const load = () => {
-      if (postcodeRef.current) postcodeRef.current.innerHTML = ''
-      new window.daum.Postcode({
-        oncomplete: (data) => {
-          setValue('road_name', data.roadAddress, { shouldValidate: true })
-          setValue('lot_num', data.jibunAddress)
-          setValue('si', data.sido)
-          setValue('emd', data.bname)
-
-          if (window.naver?.maps?.Service) {
-            window.naver.maps.Service.geocode(
-              { query: data.roadAddress },
-              (status, response) => {
-                if (status === window.naver.maps.Service.Status.OK && response.v2.addresses.length > 0) {
-                  const item = response.v2.addresses[0]
-                  setValue('lat', parseFloat(item.y))
-                  setValue('lng', parseFloat(item.x))
-                }
-                setShowAddr(false)
-              }
-            )
-          } else {
-            setShowAddr(false)
-          }
-        },
-        width: '100%',
-        height: '100%',
-      }).embed(postcodeRef.current)
+  const certInputId = (cert) => {
+    const dbKey = CERT_NAME_TO_KEY[cert]
+    if (!dbKey) {
+      console.warn(`[StoreRegistration] 알 수 없는 배지: ${cert}`)
+      return `cert-unknown-${Math.random().toString(36).slice(2, 8)}`
     }
+    return `cert-${dbKey}`
+  }
 
-    if (window.daum?.Postcode) { load(); return }
-    const scriptSrc = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
-    const existing = document.querySelector(`script[src="${scriptSrc}"]`)
-    if (existing) { existing.addEventListener('load', load, { once: true }); return }
-    const s = document.createElement('script')
-    s.src = scriptSrc
-    s.onload = load
-    document.body.appendChild(s)
+  /**
+  * ✅ AddressSearchModal 완료 핸들러
+  */
+  const handleAddressComplete = (addressData) => {
+    setValue('road_name', addressData.road_name, { shouldValidate: true })
+    setValue('lot_num', addressData.lot_num)
+    setValue('si', addressData.si)
+    setValue('emd', addressData.emd)
+    setValue('lat', addressData.lat)
+    setValue('lng', addressData.lng)
   }
 
   const onSubmit = async (data) => {
@@ -270,7 +248,14 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
     <>
       <MobileFrame>
         <header className="ow-subheader">
-          <button className="ow-back" onClick={onBack} aria-label="뒤로">←</button>
+          <Button
+            variant="ghost"
+            onClick={onBack}
+            aria-label="뒤로"
+            style={{ minWidth: 'auto', padding: '8px 12px' }}
+          >
+            ←
+          </Button>
           <h1>{isClaim ? '서류 제출 및 가게 연동' : '신규 가게 등록'}</h1>
         </header>
 
@@ -292,8 +277,16 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
             <h3 className="ow-section">🔐 사업자 신원 인증</h3>
             <div className="field">
               <label className="label">사업자등록번호 <span className="req">*</span></label>
-              <input className="input" placeholder="예) 123-45-67890" maxLength={12}
-                {...register('biz_reg_number')} />
+              <input
+                className="input"
+                placeholder="예) 123-45-67890"
+                maxLength={12}
+                {...register('biz_reg_number')}
+                onChange={(e) => {
+                  register('biz_reg_number').onChange(e)
+                  handleBizNumber(e)
+                }}
+              />
               {errors.biz_reg_number && <p className="field-error">{errors.biz_reg_number.message}</p>}
             </div>
             <div className="field">
@@ -310,7 +303,12 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
             <div className="ow-cert-grid">
               {CERT_OPTIONS.map((c) => (
                 <label key={c} className={`ow-cert ${certs.includes(c) ? 'on' : ''}`}>
-                  <input type="checkbox" checked={certs.includes(c)} onChange={() => toggleCert(c)} />{c}
+                  <input
+                    type="checkbox"
+                    checked={certs.includes(c)}
+                    onChange={() => toggleCert(c)}
+                  />
+                  <CertBadge cert={c} showIcon />
                 </label>
               ))}
             </div>
@@ -336,27 +334,19 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
                     {certFiles[c] ? '파일 선택 완료 ✓ (클릭하여 변경)' : `${c} 증명서 첨부`}
                   </button>
 
-                  {/* [추가] 파일 제거 버튼 */}
                   {certFiles[c] && (
-                    <button
+                    <Button
                       type="button"
+                      variant="danger-ghost"
                       onClick={() => removeCertFile(c)}
-                      style={{
-                        padding: '8px 12px',
-                        background: 'var(--danger, #e53935)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                      }}
                       aria-label={`${c} 증명서 제거`}
+                      style={{ padding: '8px 12px', minWidth: 'auto' }}
                     >
                       ✕
-                    </button>
+                    </Button>
                   )}
                 </div>
 
-                {/* 미리보기 */}
                 {certFiles[c]?.preview && (
                   <img
                     src={certFiles[c].preview}
@@ -386,15 +376,36 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
             </div>
             <div className="field">
               <label className="label">연락처</label>
-              <input className="input" type="tel" placeholder="예) 064-123-4567"
-                {...register('phone')} />
+              <input
+                className="input"
+                type="tel"
+                placeholder="예) 064-123-4567"
+                {...register('phone')}
+                onChange={(e) => {
+                  register('phone').onChange(e)
+                  handlePhone(e)
+                }}
+              />
               {errors.phone && <p className="field-error">{errors.phone.message}</p>}
             </div>
             <div className="field">
               <label className="label">가게 주소 <span className="req">*</span></label>
-              {!isClaim && <Button type="button" variant="ghost" size="sm" onClick={openPostcode} style={{ marginBottom: 10 }}>🔎 주소 검색</Button>}
+              {/* ✅ 수정: onClick → setShowAddr(true) */}
+              {!isClaim && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAddr(true)}
+                  style={{ marginBottom: 10 }}
+                >
+                  🔎 주소 검색
+                </Button>
+              )}
               {roadName && (
-                <div className="ow-addrbox"><p>📍 {roadName} <span>(지번: {lotNum})</span></p></div>
+                <div className="ow-addrbox">
+                  <p>📍 {roadName} <span>(지번: {lotNum})</span></p>
+                </div>
               )}
               {errors.road_name && <p className="field-error">{errors.road_name.message}</p>}
             </div>
@@ -427,16 +438,12 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
         </main>
       </MobileFrame>
 
-      {/* [F-2] 주소 검색 모달 */}
-      <div className={`ow-addrmodal ${showAddr ? 'open' : ''}`} aria-hidden={!showAddr} onClick={() => setShowAddr(false)}>
-        <div className="ow-addrmodal-card" role="dialog" aria-modal="true" aria-label="도로명 주소 검색" onClick={(e) => e.stopPropagation()}>
-          <div className="ow-addrmodal-head">
-            <strong>도로명 주소 검색</strong>
-            <button className="ow-addrmodal-close" onClick={() => setShowAddr(false)} aria-label="닫기">✕</button>
-          </div>
-          <div ref={postcodeRef} className="ow-addrmodal-body" />
-        </div>
-      </div>
+      {/* ✅ 수정: 인라인 모달 → AddressSearchModal 컴포넌트 */}
+      <AddressSearchModal
+        isOpen={showAddr}
+        onClose={() => setShowAddr(false)}
+        onComplete={handleAddressComplete}
+      />
     </>
   )
 }

@@ -110,43 +110,27 @@ export const OwnerApi = {
         storeId = data.id
       }
 
-      // 4) 심사 레코드 업데이트 또는 생성
-      const { data: existing } = await run(
-        from('owner_verifications')
-          .select('id')
-          .eq('restaurant_id', storeId)
-          .eq('owner_id', userId)
-          .eq('status', 'pending')
-          .limit(1),
-        '심사 상태를 확인하지 못했습니다.'
+      // 4) [v3.2 CTO 권장] upsert를 사용한 심사 레코드 저장 (동시성 및 UNIQUE 충돌 방지)
+      // 기존 pending 레코드가 있으면 업데이트, 없으면 생성
+      const { error: verErr } = await from('owner_verifications').upsert(
+        {
+          restaurant_id: storeId,
+          owner_id: userId,
+          biz_reg_number,
+          biz_reg_url: bizPath,
+          cert_paths: certPaths,
+          status: 'pending',
+          updated_at: new Date().toISOString(),
+        },
+        { 
+          onConflict: 'restaurant_id,owner_id', // UNIQUE 제약 조건 기준
+          ignoreDuplicates: false // 기존 데이터 덮어쓰기
+        }
       )
 
-      if (existing && existing.length > 0) {
-        await run(
-          from('owner_verifications')
-            .update({
-              biz_reg_number,
-              biz_reg_url: bizPath,
-              cert_paths: certPaths,  // ← cert_paths 사용
-              status: 'pending',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existing[0].id),
-          '심사 접수에 실패했습니다.'
-        )
-      } else {
-        await run(
-          from('owner_verifications')
-            .insert({
-              restaurant_id: storeId,
-              owner_id: userId,
-              biz_reg_number,
-              biz_reg_url: bizPath,
-              cert_paths: certPaths,  // ← cert_paths 사용
-              status: 'pending',
-            }),
-          '심사 접수에 실패했습니다.'
-        )
+      if (verErr) {
+        console.error('[OwnerApi] 심사 레코드 저장 실패:', verErr)
+        throw new Error(`심사 접수에 실패했습니다: ${verErr.message}`)
       }
 
       return storeId

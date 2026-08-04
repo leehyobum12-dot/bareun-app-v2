@@ -1,20 +1,17 @@
 // src/shared/constants/cert.js
-
-/**
- * [v3.2] 배지 인증 상수 (공유)
- * 
- * 사용 도메인:
- * - Owner: StoreRegistration.jsx (배지 선택 UI)
- * - Admin: AdminDashboard.jsx (심사 시 배지 표시)
- * - Restaurant: Home.jsx (손님에게 배지 표시, 향후)
- * 
- * 근거: Feature-Sliced Design 및 도메인 주도 설계(DDD) 원칙
- * 여러 도메인에서 사용되는 개념은 shared 레이어에 위치
- */
+//
+// [v3.2] 배지 인증 상수 (Single Source of Truth)
+//
+// 모든 배지 관련 정보의 단일 출처:
+// - UI 표시용 한글 이름
+// - DB JSONB 키
+// - 아이콘, 색상 토큰, 설명
+//
+// 이 파일을 수정하면 CertBadge, AdminDashboard, StoreRegistration
+// 모든 곳에 자동으로 반영됨
 
 /**
  * UI 표시용 배지 옵션 (한글 이름 배열)
- * Owner의 StoreRegistration에서 체크박스로 사용
  */
 export const CERT_OPTIONS = [
   '식품안심업소',
@@ -25,10 +22,6 @@ export const CERT_OPTIONS = [
 
 /**
  * 한글 배지 이름 → DB JSONB 키 매핑
- * 프론트엔드 한글 이름 → Supabase cert_paths JSONB 키
- * 
- * 예시:
- * '식품안심업소' → 'food_safety'
  */
 export const CERT_NAME_TO_KEY = {
   '식품안심업소': 'food_safety',
@@ -39,10 +32,6 @@ export const CERT_NAME_TO_KEY = {
 
 /**
  * DB JSONB 키 → 한글 배지 이름 매핑 (역방향)
- * Admin 페이지 등에서 표시용
- * 
- * 예시:
- * 'food_safety' → '식품안심업소'
  */
 export const CERT_KEY_TO_NAME = {
   'food_safety': '식품안심업소',
@@ -52,8 +41,7 @@ export const CERT_KEY_TO_NAME = {
 }
 
 /**
- * 배지별 아이콘 매핑 (UI 표시용)
- * 향후 Restaurant 도메인에서 배지 아이콘 표시 시 활용
+ * 배지별 아이콘 (UI 표시용)
  */
 export const CERT_ICONS = {
   'food_safety': '🛡️',
@@ -70,4 +58,31 @@ export const CERT_DESCRIPTIONS = {
   'model_restaurant': '위생, 친절도, 환경을 평가받은 모범 음식점',
   'low_sodium': '나트륨 저감화 실천을 인증받은 건강 음식점',
   'safe_restaurant': '생활방역 수칙을 준수하는 안심 식당',
+}
+
+/**
+ * [v3.2] 배지별 디자인 토큰 (tokens.css 변수 활용)
+ * CertBadge 컴포넌트에서 사용
+ */
+export const CERT_TOKENS = {
+  '식품안심업소': { 
+    bg: 'var(--safe-100)', 
+    color: 'var(--safe-600)', 
+    icon: '🛡️' 
+  },
+  '모범음식점': { 
+    bg: 'var(--warn-100)', 
+    color: 'var(--warn-600)', 
+    icon: '🏆' 
+  },
+  '나트륨 줄이기 실천음식점': { 
+    bg: 'var(--info-100)', 
+    color: 'var(--info-600)', 
+    icon: '🧂' 
+  },
+  '안심식당': { 
+    bg: 'var(--brand-50)', 
+    color: 'var(--brand-600)', 
+    icon: '✅' 
+  },
 }

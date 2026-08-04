@@ -23,10 +23,19 @@ const bizNumberSchema = z
  * StoreEdit — 가게 운영 정보 수정
  */
 export const storeEditSchema = z.object({
+  // [기존] 운영 정보
   phone: phoneSchema,
   open_time: z.string().optional(),
   close_time: z.string().optional(),
   closed_days: z.string().max(100, '100자 이내로 입력해 주세요.').optional(),
+  
+  // [추가] 주소 정보
+  road_name: z.string().min(1, '주소를 입력해 주세요.'),
+  lot_num: z.string().optional(),
+  si: z.string().min(1, '시/도 정보가 필요합니다.'),
+  emd: z.string().min(1, '읍/면/동 정보가 필요합니다.'),
+  lat: z.number({ required_error: '좌표가 필요합니다. 주소 검색을 사용해 주세요.' }).nullable(),
+  lng: z.number({ required_error: '좌표가 필요합니다. 주소 검색을 사용해 주세요.' }).nullable(),
 })
 
 /*

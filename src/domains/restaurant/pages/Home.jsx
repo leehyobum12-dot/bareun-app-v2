@@ -19,7 +19,7 @@ import { BIZ_TYPE } from '@/shared/constants/tag';
 import { DISEASE_CATEGORIES } from '@/domains/onboarding/constants';
 import { RestaurantApi } from '../api/restaurant.api';
 import { buildAvoidTags } from '../lib/avoidTags';
-import { distanceKm, getCurrentPosition } from '@/core/utils/geo';
+import { getCurrentPosition } from '@/core/utils/geo';
 import { isSafeUrl } from '@/core/security/validators';
 import { PAGE_SIZE } from '../constants';
 import { useFilterStore } from '../stores/filterStore';
@@ -241,8 +241,12 @@ export default function Home() {
                 actionLabel="전체 지역으로" onAction={() => reset()} />
           ) : (
             restaurants.map((r, i) => {
-              const dist = userLoc && r.lat && r.lng
-                ? distanceKm(userLoc[0], userLoc[1], r.lat, r.lng).toFixed(1) + 'km' : r.si;
+              // ✅ DB의 distance_meters 활용 (PostGIS ST_Distance)
+              const dist = r.distance_meters != null
+                ? r.distance_meters < 1000
+                  ? `${Math.round(r.distance_meters)}m`
+                  : `${(r.distance_meters / 1000).toFixed(1)}km`
+                : r.si;
               return (
                 <article key={r.id} className="card card-hover r-card reveal" style={{ '--d': `${Math.min(i, 8) * 45}ms` }}>
                   {/* ① 뱃지 좌상 / 업종 우상 */}

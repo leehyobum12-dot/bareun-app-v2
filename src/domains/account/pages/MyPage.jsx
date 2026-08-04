@@ -75,26 +75,23 @@ export default function MyPage() {
     const msg = isOwner
       ? '정말 탈퇴하시겠습니까?\n사장님으로 등록하신 모든 서류가 파기되고 가게 소유권이 초기화됩니다.\n\n이 작업은 되돌릴 수 없습니다.'
       : '정말 탈퇴하시겠습니까?\n저장된 건강 필터와 프로필이 영구 삭제됩니다.\n\n이 작업은 되돌릴 수 없습니다.'
-
     if (!window.confirm(msg)) return
 
-    // [v3.2] 추가 확인 (이중 안전장치)
     if (!window.confirm('마지막 확인: 정말로 탈퇴하시겠습니까?')) return
 
     try {
-      // 토스트는 초기화 전에 표시 (localStorage가 삭제되기 때문)
-      toast.success('회원탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.')
+      // ✅ 수정: sessionStorage에 플래그 저장 (localStorage 삭제 전)
+      sessionStorage.setItem('withdraw_complete', 'true')
 
-      // 탈퇴 + 완전 초기화 실행
+      // 탈퇴 + 완전 초기화 실행 (여기서 localStorage 삭제됨)
       await AccountApi.withdraw()
 
-      // 짧은 딜레이 후 강제 리로드 (1.5초: 토스트 표시 시간)
-      // window.location.href 대신 assign 사용 (브라우저 히스토리에서 제거)
-      setTimeout(() => {
-        window.location.replace('/login')
-      }, 1500)
+      // 즉시 리다이렉트 (토스트는 Login 페이지에서 표시)
+      window.location.replace('/login')
     } catch (e) {
       console.error('[MyPage] 탈퇴 실패:', e)
+      // 실패 시 플래그 제거
+      sessionStorage.removeItem('withdraw_complete')
       toast.error(`탈퇴 처리 중 문제가 발생했습니다: ${e.message}`)
     }
   }

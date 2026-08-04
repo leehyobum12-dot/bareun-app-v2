@@ -1,27 +1,31 @@
 // src/domains/auth/pages/Login.jsx
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import MobileFrame from '@/shared/ui/MobileFrame'
 import { useToast } from '@/app/providers/ToastProvider'
 import { AuthApi } from '../api/auth.api'
 import './Login.css'
 
-/**
- * [수정 이력]
- * - L-3: useEffect 리디렉트 제거 → RequireGuest가 router 레벨에서 처리
- * - L-5: 중복 클릭 방지 (pending 상태 + disabled)
- * - 불필요 import 제거: useAuth, useNavigate, useEffect
- */
 export default function Login() {
   const toast = useToast()
   const [pending, setPending] = useState(false)
+  /**
+     * [v3.2] 탈퇴 완료 플래그 확인
+     * performFullCleanup에서 localStorage가 삭제되므로
+     * sessionStorage에 저장된 플래그를 여기서 소비
+     */
+  useEffect(() => {
+    if (sessionStorage.getItem('withdraw_complete')) {
+      sessionStorage.removeItem('withdraw_complete')
+      toast.success('회원탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.')
+    }
+  }, [toast])
 
   const handleOAuth = async (provider) => {
     if (pending) return
     setPending(true)
     try {
       await AuthApi.signInWithOAuth(provider)
-      // 성공 시 Supabase가 리디렉트 → setPending(false) 불필요
     } catch (e) {
       toast.error(e.message || '로그인 중 문제가 발생했습니다.')
       setPending(false)
