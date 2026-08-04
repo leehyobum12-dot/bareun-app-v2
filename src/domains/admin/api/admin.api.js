@@ -2,6 +2,7 @@
 
 import { from, rpc, run } from '@/core/lib/api'
 import { supabase } from '@/core/lib/supabase'
+import { CERT_KEY_TO_NAME } from '@/shared/cert'
 
 export const AdminApi = {
   async getPendingVerifications() {
@@ -25,11 +26,29 @@ export const AdminApi = {
   },
 
   /**
-   * [수정] 승인 처리
-   * - 2개 쿼리 → RPC 1회 호출 (원자적)
-   * - user_type 자동 전환 포함
-   * - 중복 pending 레코드 정리 포함
+   * [v3.2 추가] 여러 인증 서류의 Signed URL 일괄 생성
    */
+  async getSignedUrlsForCerts(certPaths) {
+    if (!certPaths || typeof certPaths !== 'object') return {}
+
+    const result = {}
+    
+    for (const [dbKey, path] of Object.entries(certPaths)) {
+      if (path && typeof path === 'string') {
+        try {
+          const signedUrl = await this.getSignedUrl(path)
+          // DB 키를 한글 이름으로 변환하여 반환
+          const displayName = CERT_KEY_TO_NAME[dbKey] || dbKey
+          result[displayName] = signedUrl
+        } catch (error) {
+          console.warn(`[AdminApi] ${dbKey} Signed URL 생성 실패:`, error)
+        }
+      }
+    }
+
+    return result
+  },
+
   async approve(item) {
     return rpc(
       'approve_restaurant',
@@ -39,13 +58,14 @@ export const AdminApi = {
   },
 
   /**
-   * [수정] 반려 처리
-   * - RPC로 전환 (원자적 + 관리자 권한 검증)
+   * [v3.2 수정] 반려 처리 (사유 지원)
+   * @param {Object} item - 심사 항목
+   * @param {string} reason - 반려 사유
    */
-  async reject(item) {
+  async reject(item, reason) {
     return rpc(
       'reject_restaurant',
-      { p_verification_id: item.id, p_reason: null },
+      { p_verification_id: item.id, p_reason: reason },
       '반려 처리에 실패했습니다.'
     )
   },

@@ -17,50 +17,123 @@ export default function AdminDashboard() {
 
   const [preview, setPreview] = useState(null)
   const [busyId, setBusyId] = useState(null)
+  const [rejectModal, setRejectModal] = useState(null)  // ← 반려 사유 모달 상태
+  const [rejectReason, setRejectReason] = useState('')  // ← 반려 사유 입력
 
-  /*
-   * [TanStack Query] 심사 대기 목록
-   * - loading, error, refetch 자동 관리
-   * - 5분간 캐시 (staleTime)
-   * - 네트워크 오류 시 2회 재시도 (retry)
-   */
   const { data: items = [], isLoading: loading } = useQuery({
     queryKey: ['admin', 'pending-verifications'],
     queryFn: AdminApi.getPendingVerifications,
   })
 
   const viewDoc = async (path, title) => {
-    try { setPreview({ url: await AdminApi.getSignedUrl(path), title }) }
-    catch { toast.error('이미지를 불러오지 못했습니다.') }
+    try { 
+      setPreview({ url: await AdminApi.getSignedUrl(path), title }) 
+    } catch { 
+      toast.error('이미지를 불러오지 못했습니다.') 
+    }
   }
 
-  const setStatus = async (item, approve) => {
-    const msg = approve
-      ? `[${item.restaurants?.store_name}] 식당을 승인할까요?\n승인 시 손님 앱에 즉시 노출됩니다.`
-      : '이 서류를 반려할까요?'
+  // 승인 처리
+  const handleApprove = async (item) => {
+    const msg = `[${item.restaurants?.store_name}] 식당을 승인할까요?\n승인 시 손님 앱에 즉시 노출됩니다.`
     if (!window.confirm(msg)) return
     setBusyId(item.id)
     try {
-      approve ? await AdminApi.approve(item) : await AdminApi.reject(item)
-      toast.success(`${approve ? '승인' : '반려'} 처리되었습니다.`)
+      await AdminApi.approve(item)
+      toast.success('승인 처리되었습니다.')
       setPreview(null)
       queryClient.invalidateQueries({ queryKey: ['admin', 'pending-verifications'] })
 
-      /* [7-c-2c] 승인/반려 → owner 에게 푸시 알림 */
       if (item.owner_id) {
         await supabase.functions.invoke('send-push', {
           body: {
             userIds: [item.owner_id],
-            title: approve ? '가게 승인 완료 🎉' : '가게 심사 반려',
-            body: approve
-              ? '바른인증식당에 가게가 등록되었습니다.'
-              : '제출하신 서류가 반려되었습니다. 사유를 확인해 주세요.',
+            title: '가게 승인 완료 🎉',
+            body: '바른인증식당에 가게가 등록되었습니다.',
             deeplink: '/owner',
           },
-        }).catch(() => { })   // 푸시 실패가 승인 처리를 막지 않도록
+        }).catch(() => { })
       }
-    } catch (e) { toast.error(e.message) }
-    finally { setBusyId(null) }
+    } catch (e) { 
+      toast.error(e.message) 
+    } finally { 
+      setBusyId(null) 
+    }
+  }
+
+  // 반려 모달 열기
+  const openRejectModal = (item) => {
+    setRejectModal(item)
+    setRejectReason('')
+  }
+
+  // 반려 처리 (사유 포함)
+  const handleReject = async () => {
+    if (!rejectReason.trim()) {
+      toast.error('반려 사유를 입력해 주세요.')
+      return
+    }
+
+    setBusyId(rejectModal.id)
+    try {
+      await AdminApi.reject(rejectModal, rejectReason.trim())
+      toast.success('반려 처리되었습니다.')
+      setRejectModal(null)
+      setRejectReason('')
+      setPreview(null)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'pending-verifications'] })
+
+      if (rejectModal.owner_id) {
+        await supabase.functions.invoke('send-push', {
+          body: {
+            userIds: [rejectModal.owner_id],
+            title: '가게 심사 반려',
+            body: `제출하신 서류가 반려되었습니다.\n사유: ${rejectReason}`,
+            deeplink: '/owner',
+          },
+        }).catch(() => { })
+      }
+    } catch (e) { 
+      toast.error(e.message) 
+    } finally { 
+      setBusyId(null) 
+    }
+  }
+
+  // cert_paths를 한글 이름으로 변환하여 표시
+  const renderCertButtons = (certPaths) => {
+    if (!certPaths || typeof certPaths !== 'object') return null
+    
+    const entries = Object.entries(certPaths).filter(([, path]) => !!path)
+    if (entries.length === 0) return null
+
+    return (
+      <div className="ad-certs">
+        <p>선택 증명서 확인</p>
+        {entries.map(([dbKey, path]) => {
+          // DB 키를 한글 이름으로 변환
+          const displayName = {
+            'food_safety': '식품안심업소',
+            'model_restaurant': '모범음식점',
+            'low_sodium': '나트륨 줄이기 실천음식점',
+            'safe_restaurant': '안심식당',
+          }[dbKey] || dbKey
+
+          return (
+            <Button 
+              key={dbKey} 
+              variant="ghost" 
+              block 
+              size="sm" 
+              onClick={() => viewDoc(path, displayName)} 
+              style={{ marginBottom: 6 }}
+            >
+              📎 {displayName}
+            </Button>
+          )
+        })}
+      </div>
+    )
   }
 
   return (
@@ -112,28 +185,33 @@ export default function AdminDashboard() {
                   📭 사업자등록증 미제출
                 </Button>
               )}
-              {item.cert_urls && Object.keys(item.cert_urls).length > 0 ? (
-                <div className="ad-certs">
-                  <p>선택 증명서 확인</p>
-                  {Object.entries(item.cert_urls)
-                    .filter(([, path]) => !!path)
-                    .map(([name, path]) => (
-                      <Button key={name} variant="ghost" block size="sm" onClick={() => viewDoc(path, name)} style={{ marginBottom: 6 }}>
-                        📎 {name}
-                      </Button>
-                    ))}
-                </div>
-              ) : null}
+              
+              {/* [v3.2 수정] cert_paths 사용 */}
+              {renderCertButtons(item.cert_paths)}
 
               <div className="ad-actions">
-                <Button variant="danger-ghost" style={{ flex: 1 }} disabled={busyId === item.id} onClick={() => setStatus(item, false)}>반려</Button>
-                <Button style={{ flex: 1 }} disabled={busyId === item.id} onClick={() => setStatus(item, true)}>승인 (권한 부여)</Button>
+                <Button 
+                  variant="danger-ghost" 
+                  style={{ flex: 1 }} 
+                  disabled={busyId === item.id} 
+                  onClick={() => openRejectModal(item)}
+                >
+                  반려
+                </Button>
+                <Button 
+                  style={{ flex: 1 }} 
+                  disabled={busyId === item.id} 
+                  onClick={() => handleApprove(item)}
+                >
+                  승인 (권한 부여)
+                </Button>
               </div>
             </article>
           ))
         )}
       </main>
 
+      {/* 서류 미리보기 모달 */}
       {preview && (
         <div className="ad-modal" onClick={() => setPreview(null)}>
           <div className="ad-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -142,6 +220,55 @@ export default function AdminDashboard() {
               <button className="ad-modal-close" onClick={() => setPreview(null)} aria-label="닫기">✕</button>
             </div>
             <img src={preview.url} alt={preview.title} />
+          </div>
+        </div>
+      )}
+
+      {/* [v3.2 추가] 반려 사유 입력 모달 */}
+      {rejectModal && (
+        <div className="ad-modal" onClick={() => setRejectModal(null)}>
+          <div className="ad-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="ad-modal-head">
+              <strong>반려 사유 입력</strong>
+              <button className="ad-modal-close" onClick={() => setRejectModal(null)} aria-label="닫기">✕</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <p style={{ marginBottom: 12, fontSize: 14, color: 'var(--ink-500)' }}>
+                <strong>{rejectModal.restaurants?.store_name}</strong> 식당의 서류를 반려합니다.
+              </p>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="반려 사유를 상세히 입력해 주세요.&#10;예) 사업자등록증의 상호명이 일치하지 않습니다."
+                rows={5}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <Button 
+                  variant="ghost" 
+                  block 
+                  onClick={() => setRejectModal(null)}
+                >
+                  취소
+                </Button>
+                <Button 
+                  variant="danger" 
+                  block 
+                  disabled={busyId === rejectModal.id || !rejectReason.trim()}
+                  onClick={handleReject}
+                >
+                  {busyId === rejectModal.id ? '처리 중…' : '반려 확정'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -1,5 +1,8 @@
+// src/domains/owner/api/owner.api.js
+
 import { from, rpc, run } from '@/core/lib/api'
 import { supabase } from '@/core/lib/supabase'
+import { CERT_NAME_TO_KEY } from '@/shared/constants/cert'
 
 const generateUuid = () => {
   if (typeof crypto?.randomUUID === 'function') return crypto.randomUUID();
@@ -13,12 +16,13 @@ export const OwnerApi = {
     const { data } = await run(
       from('restaurants').select('*')
         .eq('owner_id', ownerId)
-        .eq('is_closed', false)          // ★ 폐업 가게 제외
+        .eq('is_closed', false)
         .order('id', { ascending: false }).limit(1),
       '내 매장 정보를 불러오지 못했습니다.'
     )
     return data?.[0] ?? null
   },
+
   async getVerificationStatus(restaurantId) {
     const { data } = await run(
       from('owner_verifications').select('status').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(1),
@@ -26,6 +30,7 @@ export const OwnerApi = {
     )
     return data?.[0]?.status ?? 'approved'
   },
+
   async searchPublicStores(keyword) {
     const { data } = await run(
       from('restaurants').select('*')
@@ -34,26 +39,23 @@ export const OwnerApi = {
     )
     return data ?? []
   },
+
   async claimStore(restaurantId) {
     return rpc('claim_restaurant', { p_restaurant_id: restaurantId }, '가게 연동에 실패했습니다.')
   },
+
+  /**
+   * [v3.2 수정] 가게 등록 신청
+   * 
+   * 변경 사항:
+   * 1. cert_urls → cert_paths 컬럼명 변경
+   * 2. 한글 배지 이름 → 영문 DB 키 자동 변환
+   */
   async submitRegistration({ userId, storePayload, bizRegFile, certFiles, initialStoreId }) {
     const uploaded = []
     try {
-      /*
-       * [수정] restaurants 테이블에 없는 필드 분리
-       * biz_reg_number는 owner_verifications 전용이므로
-       * restaurants 저장 시 제외해야 400 에러 방지
-       */
       const { biz_reg_number, ...restaurantPayload } = storePayload
 
-      /*
-     * [지연 claim] claim 모드면 소유권 선점 (멱등 RPC)
-     * - StoreSearch는 더 이상 claim을 호출하지 않음 → 여기서 확정
-     * - 재제출(initialStoreId 있고 이미 owner)이어도 멱등이라 no-op
-     * - 이 호출 직후 F5/뒤로가기를 맞아도 owner_id + pending이 일관되게 존재
-     *   → 라운지가 'pending'으로 열려 "계속 작성/연동 취소"로 탈출 가능 (데드락 없음)
-     */
       if (initialStoreId) {
         await rpc('claim_restaurant', { p_restaurant_id: initialStoreId }, '가게 연동에 실패했습니다.')
       }
@@ -65,18 +67,37 @@ export const OwnerApi = {
       if (bizErr) throw new Error(`사업자등록증 업로드 실패: ${bizErr.message}`)
       uploaded.push(bizPath)
 
-      // 2) 인증서 업로드
-      const certUrls = {}
-      for (const [cert, file] of Object.entries(certFiles)) {
-        const ext = file.name.split('.').pop()
-        const path = `${userId}/certs/${generateUuid()}.${ext}`
-        const { error: certErr } = await supabase.storage.from('business_docs').upload(path, file)
-        if (certErr) throw new Error(`${cert} 증명서 업로드 실패: ${certErr.message}`)
-        certUrls[cert] = path
-        uploaded.push(path)
+      // 2) 배지 인증서 업로드 (한글 이름 → 영문 키 변환)
+      const certPaths = {
+        food_safety: null,
+        model_restaurant: null,
+        low_sodium: null,
+        safe_restaurant: null,
       }
 
-      // 3) 식당 데이터 저장 ← restaurantPayload 사용 (biz_reg_number 제외)
+      if (certFiles && typeof certFiles === 'object') {
+        for (const [certName, file] of Object.entries(certFiles)) {
+          // 한글 이름을 영문 DB 키로 변환
+          const dbKey = CERT_NAME_TO_KEY[certName]
+          
+          if (!dbKey) {
+            console.warn(`[OwnerApi] 알 수 없는 인증 이름 무시: ${certName}`)
+            continue
+          }
+
+          if (!file) continue
+
+          const ext = file.name.split('.').pop()
+          const path = `${userId}/certs/${generateUuid()}.${ext}`
+          const { error: certErr } = await supabase.storage.from('business_docs').upload(path, file)
+          if (certErr) throw new Error(`${certName} 증명서 업로드 실패: ${certErr.message}`)
+          
+          certPaths[dbKey] = path
+          uploaded.push(path)
+        }
+      }
+
+      // 3) 식당 데이터 저장
       let storeId = initialStoreId
       if (initialStoreId) {
         await run(
@@ -89,7 +110,7 @@ export const OwnerApi = {
         storeId = data.id
       }
 
-      // 4) 심사 레코드: 기존 pending UPDATE, 없으면 INSERT ← biz_reg_number 사용
+      // 4) 심사 레코드 업데이트 또는 생성
       const { data: existing } = await run(
         from('owner_verifications')
           .select('id')
@@ -104,9 +125,9 @@ export const OwnerApi = {
         await run(
           from('owner_verifications')
             .update({
-              biz_reg_number,                    // ← 분리된 필드 사용
+              biz_reg_number,
               biz_reg_url: bizPath,
-              cert_urls: certUrls,
+              cert_paths: certPaths,  // ← cert_paths 사용
               status: 'pending',
               updated_at: new Date().toISOString(),
             })
@@ -119,9 +140,9 @@ export const OwnerApi = {
             .insert({
               restaurant_id: storeId,
               owner_id: userId,
-              biz_reg_number,                    // ← 분리된 필드 사용
+              biz_reg_number,
               biz_reg_url: bizPath,
-              cert_urls: certUrls,
+              cert_paths: certPaths,  // ← cert_paths 사용
               status: 'pending',
             }),
           '심사 접수에 실패했습니다.'
@@ -130,7 +151,10 @@ export const OwnerApi = {
 
       return storeId
     } catch (e) {
-      if (uploaded.length) await supabase.storage.from('business_docs').remove(uploaded)
+      if (uploaded.length) {
+        const { error: removeErr } = await supabase.storage.from('business_docs').remove(uploaded)
+        if (removeErr) console.error('[OwnerApi] Storage 파일 정리 실패:', removeErr)
+      }
       throw e
     }
   },
@@ -142,9 +166,11 @@ export const OwnerApi = {
   async updateStoreInfo(storeId, payload) {
     return run(from('restaurants').update(payload).eq('id', storeId), '가게 정보 수정에 실패했습니다.')
   },
+
   async disconnectStore(storeId, action) {
     return rpc('disconnect_store', { p_store_id: storeId, p_action: action }, '처리 중 오류가 발생했습니다.')
   },
+
   async cancelClaim(restaurantId) {
     return rpc(
       'cancel_claim',
