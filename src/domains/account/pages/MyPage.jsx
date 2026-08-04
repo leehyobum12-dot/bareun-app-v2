@@ -72,17 +72,19 @@ export default function MyPage() {
   }
 
   const withdraw = async () => {
-    const msg = isOwner
-      ? '정말 탈퇴하시겠습니까?\n사장님으로 등록하신 모든 서류가 파기되고 가게 소유권이 초기화됩니다.'
-      : '정말 탈퇴하시겠습니까?\n저장된 건강 필터와 프로필이 영구 삭제됩니다.'
-    if (!window.confirm(msg)) return
-    try {
-      await AccountApi.withdraw(user)
-      await logout()
-      toast.success('회원탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.')
-      navigate('/login', { replace: true })
-    } catch (e) { toast.error(`탈퇴 처리 중 문제가 발생했습니다: ${e.message}`) }
+  const msg = isOwner
+    ? '정말 탈퇴하시겠습니까?\n사장님으로 등록하신 모든 서류가 파기되고 가게 소유권이 초기화됩니다.'
+    : '정말 탈퇴하시겠습니까?\n저장된 건강 필터와 프로필이 영구 삭제됩니다.'
+  if (!window.confirm(msg)) return
+  try {
+    await AccountApi.withdraw()  // ← user 파라미터 제거 (Edge Function이 JWT에서 추출)
+    await logout()
+    toast.success('회원탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.')
+    navigate('/login', { replace: true })
+  } catch (e) { 
+    toast.error(`탈퇴 처리 중 문제가 발생했습니다: ${e.message}`) 
   }
+}
 
   return (
     <MobileFrame>
