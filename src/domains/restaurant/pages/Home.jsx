@@ -242,7 +242,7 @@ export default function Home() {
           ) : (
             restaurants.map((r, i) => {
               // ✅ DB의 distance_meters 활용 (PostGIS ST_Distance)
-              const dist = r.distance_meters != null
+              const dist = userLoc && r.distance_meters != null
                 ? r.distance_meters < 1000
                   ? `${Math.round(r.distance_meters)}m`
                   : `${(r.distance_meters / 1000).toFixed(1)}km`
