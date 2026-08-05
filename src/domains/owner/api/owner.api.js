@@ -156,10 +156,24 @@ export const OwnerApi = {
   },
 
   async cancelClaim(restaurantId) {
-    return rpc(
-      'cancel_claim',
-      { p_restaurant_id: restaurantId },
-      '연동 취소에 실패했습니다.'
-    )
-  },
+  // 1) 삭제 대상 파일 경로 수집 (RPC가 행을 지우기 전에)
+  const { data: ver } = await supabase
+    .from('owner_verifications')
+    .select('biz_reg_url, cert_paths')
+    .eq('restaurant_id', restaurantId)
+    .maybeSingle()
+
+  const result = await rpc('cancel_claim', { p_restaurant_id: restaurantId }, '연동 취소에 실패했습니다.')
+
+  // 2) Storage 정리 (best-effort)
+  if (ver) {
+    const paths = [ver.biz_reg_url, ...Object.values(ver.cert_paths || {})]
+      .filter((p) => typeof p === 'string' && p)
+    if (paths.length) {
+      const { error } = await supabase.storage.from('business_docs').remove(paths)
+      if (error) console.warn('[OwnerApi] Storage 정리 실패:', error)
+    }
+  }
+  return result
+},
 }

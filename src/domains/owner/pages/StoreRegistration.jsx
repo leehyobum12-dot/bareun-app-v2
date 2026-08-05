@@ -186,6 +186,10 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
     setValue('emd', addressData.emd)
     setValue('lat', addressData.lat)
     setValue('lng', addressData.lng)
+
+    if (addressData.lat == null || addressData.lng == null) {
+      toast.error('좌표 변환에 실패했습니다. 주소 검색을 다시 시도해 주세요.')
+    }
   }
 
   const onSubmit = async (data) => {
@@ -402,6 +406,12 @@ export default function StoreRegistration({ initialData, onBack, onDone }) {
                   🔎 주소 검색
                 </Button>
               )}
+              <input type="hidden" {...register('road_name')} />
+              <input type="hidden" {...register('lot_num')} />
+              <input type="hidden" {...register('si')} />
+              <input type="hidden" {...register('emd')} />
+              <input type="hidden" {...register('lat')} />
+              <input type="hidden" {...register('lng')} />
               {roadName && (
                 <div className="ow-addrbox">
                   <p>📍 {roadName} <span>(지번: {lotNum})</span></p>
